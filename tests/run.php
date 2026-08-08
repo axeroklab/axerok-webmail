@@ -115,6 +115,8 @@ $assert(str_contains($rawMail, 'Content-Type: text/html; charset=UTF-8'), 'SMTP 
 $assert(str_contains($rawMail, 'filename="informe.pdf"'), 'SMTP attachment');
 $assert(str_contains($rawMail, 'Disposition-Notification-To: <from@example.com>'), 'SMTP receipt request');
 $assert(str_contains($rawMail, 'X-Priority: 1 (Highest)'), 'SMTP high priority');
+$recipientParser=(new ReflectionClass($smtp))->getMethod('recipients');
+$assert($recipientParser->invoke($smtp,'Ana <ana@example.com>, BOB@example.com')===['ana@example.com','bob@example.com'],'SMTP contact display-name recipient');
 
 $imapValidation = new ImapClient([]);
 $imapReflection=new ReflectionClass($imapValidation);$encodeMailbox=$imapReflection->getMethod('encodeMailbox');$decodeMailbox=$imapReflection->getMethod('decodeMailbox');$mailboxName='Enviados & Más';$encodedMailbox=$encodeMailbox->invoke($imapValidation,$mailboxName);
@@ -130,6 +132,8 @@ $assert(ImapClient::pageSequenceRange(17,2,40)===null,'IMAP page beyond mailbox'
 $assert(ImapClient::searchCriteria('factura')==='OR FROM "factura" OR TO "factura" SUBJECT "factura"','IMAP fast header search');
 $assert(ImapClient::searchCriteria('factura',true)==='TEXT "factura"','IMAP optional body search');
 $assert(ImapClient::searchCriteria('a"b')==='OR FROM "a\\"b" OR TO "a\\"b" SUBJECT "a\\"b"','IMAP search escaping');
+$assert(ImapClient::threadIdFromHeaders(['message-id'=>'<root@example.com>'])==='<root@example.com>','thread root message id');
+$assert(ImapClient::threadIdFromHeaders(['message-id'=>'<reply@example.com>','in-reply-to'=>'<root@example.com>','references'=>'<root@example.com> <reply@example.com>'])==='<root@example.com>','thread first reference');
 $advanced=ImapClient::searchCriteriaFromFilters('',false,['from'=>'ventas@example.com','subject'=>'factura','status'=>'unread','size_op'=>'larger','size_bytes'=>1048576,'since'=>'2026-07-01','before'=>'2026-08-01','has_attachment'=>true]);
 $assert($advanced==='FROM "ventas@example.com" SUBJECT "factura" UNSEEN LARGER 1048576 SINCE 01-Jul-2026 BEFORE 01-Aug-2026 HEADER Content-Type "multipart/mixed"','IMAP advanced search criteria');
 $assert(ImapClient::searchCriteriaFromFilters('cliente',false,['exclude'=>'spam','status'=>'flagged'])==='NOT TEXT "spam" FLAGGED OR FROM "cliente" OR TO "cliente" SUBJECT "cliente"','IMAP combined search criteria');

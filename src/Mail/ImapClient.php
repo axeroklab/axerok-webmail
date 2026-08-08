@@ -134,7 +134,7 @@ final class ImapClient
             $range = self::pageSequenceRange((int)$status['exists'], $page, $pageSize);
             if ($range === null) { return []; }
             [$start, $end] = $range;
-            $parts = $this->command("FETCH {$start}:{$end} (UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID AUTO-SUBMITTED PRECEDENCE LIST-ID LIST-UNSUBSCRIBE)])");
+            $parts = $this->command("FETCH {$start}:{$end} (UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES AUTO-SUBMITTED PRECEDENCE LIST-ID LIST-UNSUBSCRIBE)])");
         } else {
             $search = $this->command('UID SEARCH CHARSET UTF-8 ' . $criteria);
             foreach ($search as $line) {
@@ -147,7 +147,7 @@ final class ImapClient
             $this->lastMailboxTotal = count($uids);
             $uids = array_slice($uids, max(0, ($page - 1) * $pageSize), $pageSize);
             if ($uids === []) { return []; }
-            $parts = $this->command('UID FETCH ' . implode(',', $uids) . ' (UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID AUTO-SUBMITTED PRECEDENCE LIST-ID LIST-UNSUBSCRIBE)])');
+            $parts = $this->command('UID FETCH ' . implode(',', $uids) . ' (UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES AUTO-SUBMITTED PRECEDENCE LIST-ID LIST-UNSUBSCRIBE)])');
         }
         $byUid = [];
         for ($index = 0, $count = count($parts); $index < $count; $index++) {
@@ -163,6 +163,7 @@ final class ImapClient
                 'subject' => MimeParser::decodeHeader($headers['subject'] ?? '(Sin asunto)'),
                 'date' => $headers['date'] ?? '',
                 'message_id' => $headers['message-id'] ?? '',
+                'thread_id' => self::threadIdFromHeaders($headers),
                 'seen' => str_contains($meta, '\\Seen'),
                 'flagged' => str_contains($meta, '\\Flagged'),
                 'keywords' => self::keywordsFromFetch($meta),
@@ -177,6 +178,17 @@ final class ImapClient
     public function lastMailboxTotal(): int
     {
         return $this->lastMailboxTotal;
+    }
+
+    /** @param array<string,string> $headers */
+    public static function threadIdFromHeaders(array $headers): string
+    {
+        $references=(string)($headers['references']??'');
+        if(preg_match('/<[^<>\s]+>/', $references, $match))return strtolower($match[0]);
+        $reply=(string)($headers['in-reply-to']??'');
+        if(preg_match('/<[^<>\s]+>/', $reply, $match))return strtolower($match[0]);
+        $message=(string)($headers['message-id']??'');
+        return preg_match('/<[^<>\s]+>/', $message, $match)?strtolower($match[0]):'';
     }
 
     public static function searchCriteria(string $query, bool $searchBody = false): string

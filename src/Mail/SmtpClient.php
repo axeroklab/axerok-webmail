@@ -68,9 +68,10 @@ final class SmtpClient
     /** @return array<int,string> */
     private function recipients(string $value): array
     {
-        $items = array_values(array_filter(array_map('trim', preg_split('/[,;]/', $value) ?: []), static fn(string $item): bool => $item !== ''));
-        foreach ($items as $item) { if (!filter_var($item, FILTER_VALIDATE_EMAIL)) { throw new MailException('Hay una dirección de correo inválida.'); } }
-        return array_values(array_unique($items));
+        if(strlen($value)>5000||preg_match('/[\r\n\x00]/',$value))throw new MailException('Hay una dirección de correo inválida.');
+        $items=array_values(array_filter(array_map('trim',preg_split('/[,;]/',$value)?:[]),static fn(string $item):bool=>$item!==''));$emails=[];
+        foreach($items as $item){if(preg_match('/<([^<>]+)>$/',$item,$match))$item=trim($match[1]);if(!filter_var($item,FILTER_VALIDATE_EMAIL))throw new MailException('Hay una dirección de correo inválida.');$emails[]=strtolower($item);}
+        return array_values(array_unique($emails));
     }
 
     private function write(string $line): void { fwrite($this->socket, $line . "\r\n"); }
