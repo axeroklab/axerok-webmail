@@ -17,6 +17,7 @@ final class MailPreferenceRepository
         $this->ensureColumn('mail_drafts',"priority VARCHAR(10) NOT NULL DEFAULT 'normal'");
         $this->db->exec("CREATE TABLE IF NOT EXISTS mail_drafts_v2 (id VARCHAR(64) NOT NULL, owner VARCHAR(255) NOT NULL, recipients_to TEXT NOT NULL, recipients_cc TEXT NOT NULL, recipients_bcc TEXT NOT NULL, subject VARCHAR(300) NOT NULL, body_html TEXT NOT NULL, receipt_requested INTEGER NOT NULL DEFAULT 0, priority VARCHAR(10) NOT NULL DEFAULT 'normal', updated_at VARCHAR(32) NOT NULL, PRIMARY KEY(owner,id))");
         $this->db->exec("CREATE TABLE IF NOT EXISTS mail_templates (id VARCHAR(64) NOT NULL, owner VARCHAR(255) NOT NULL, name VARCHAR(120) NOT NULL, subject VARCHAR(300) NOT NULL, body_html TEXT NOT NULL, updated_at VARCHAR(32) NOT NULL, PRIMARY KEY(owner,id))");
+        $this->db->exec("CREATE TABLE IF NOT EXISTS blocked_senders (owner VARCHAR(255) NOT NULL, sender VARCHAR(255) NOT NULL, created_at VARCHAR(32) NOT NULL, PRIMARY KEY(owner,sender))");
     }
 
     /** @return array<string,mixed> */
@@ -66,6 +67,11 @@ final class MailPreferenceRepository
     }
 
     public function deleteTemplate(string $owner,string $id): void {$s=$this->db->prepare('DELETE FROM mail_templates WHERE owner=? AND id=?');$s->execute([$owner,$id]);}
+
+    /** @return array<int,string> */
+    public function blockedSenders(string $owner): array {$s=$this->db->prepare('SELECT sender FROM blocked_senders WHERE owner=? ORDER BY sender');$s->execute([$owner]);return array_map(static fn(array $row):string=>(string)$row['sender'],$s->fetchAll()?:[]);}
+    public function blockSender(string $owner,string $sender): void {$sender=strtolower(trim($sender));if(!filter_var($sender,FILTER_VALIDATE_EMAIL))throw new \RuntimeException('El remitente no es válido.');try{$s=$this->db->prepare('INSERT INTO blocked_senders(owner,sender,created_at) VALUES(?,?,?)');$s->execute([$owner,$sender,date(DATE_ATOM)]);}catch(\PDOException){}}
+    public function unblockSender(string $owner,string $sender): void {$s=$this->db->prepare('DELETE FROM blocked_senders WHERE owner=? AND sender=?');$s->execute([$owner,strtolower(trim($sender))]);}
 
     private function ensureColumn(string $table,string $definition): void
     {

@@ -101,6 +101,10 @@ if(class_exists(SQLite3::class)){
     $assert(count($preferenceRepository->templates('owner@example.com'))===1&&$template['name']==='Respuesta comercial','persistent mail template');
     $preferenceRepository->deleteTemplate('owner@example.com',(string)$template['id']);
     $assert($preferenceRepository->templates('owner@example.com')===[],'delete mail template');
+    $preferenceRepository->blockSender('owner@example.com','BLOCKED@example.com');
+    $assert($preferenceRepository->blockedSenders('owner@example.com')===['blocked@example.com'],'blocked sender normalization');
+    $preferenceRepository->unblockSender('owner@example.com','blocked@example.com');
+    $assert($preferenceRepository->blockedSenders('owner@example.com')===[],'unblock sender');
     unlink($appDatabase);
 }
 

@@ -60,6 +60,9 @@ export const api = {
   templates:()=>request<{templates:MailTemplate[]}>('templates'),
   saveTemplate:(template:Pick<MailTemplate,'name'|'subject'|'body_html'>,csrf:string)=>{const body=new FormData();Object.entries(template).forEach(([key,value])=>body.set(key,value));body.set('csrf',csrf);return request<{ok:boolean;template:MailTemplate;templates:MailTemplate[]}>('templates',{}, {method:'POST',body});},
   deleteTemplate:(id:string,csrf:string)=>request<{ok:boolean;templates:MailTemplate[]}>('templates',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf})}),
+  blockSender:(folder:string,uid:number,csrf:string)=>{const body=new FormData();body.set('folder',folder);body.set('uid',String(uid));body.set('csrf',csrf);return request<{ok:boolean;sender:string}>('block-sender',{}, {method:'POST',body});},
+  blockedSenders:()=>request<{senders:string[]}>('blocked-senders'),
+  unblockSender:(sender:string,csrf:string)=>request<{ok:boolean;senders:string[]}>('blocked-senders',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({sender,csrf})}),
   send: (body:FormData) => request<{ok:boolean;warning:string}>('send',{}, {method:'POST',body}),
   logout: (csrf:string) => {const body=new FormData();body.set('csrf',csrf);return request<{ok:boolean}>('logout',{}, {method:'POST',body});},
 };
