@@ -111,6 +111,9 @@ con `Server-Timing`, lista por rangos de secuencia sin transferir todos los UID 
 solamente la parte MIME necesaria al abrir un mensaje. No realiza precargas IMAP en
 segundo plano ni guarda cuerpos en la caché del servidor.
 
+La bandeja visible se actualiza cada 60 segundos y también al volver a la pestaña. El
+sondeo se suspende mientras la página está oculta o hay un mensaje abierto.
+
 Pendiente antes de producción: validar en el cPanel objetivo y completar las pruebas
 dinámicas indicadas en `SECURITY.md`. El paquete actual es candidato de prueba, no una
 versión aprobada para producción.
