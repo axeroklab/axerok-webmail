@@ -11,9 +11,8 @@ return [
         // Generate with: php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
         'key' => 'CHANGE_THIS_TO_64_RANDOM_HEX_CHARACTERS',
         'session_name' => 'axerok_mail',
-        // Persistent login, renewed while the account is used (default: 1 year).
-        // The user can always terminate it with "Cerrar sesión".
-        'session_lifetime' => 31536000,
+        'session_lifetime' => 28800,
+        'session_idle_timeout' => 1800,
     ],
     'mail' => [
         // Use the cPanel server hostname. One installation can serve every

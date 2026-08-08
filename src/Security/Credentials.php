@@ -38,6 +38,11 @@ final class Credentials
         return array_key_first($accounts);
     }
 
+    public static function has(string $email): bool
+    {
+        return isset(self::accountMap()[strtolower(trim($email))]);
+    }
+
     public static function password(string $hexKey, ?string $requested = null): ?string
     {
         $email = self::email($requested);

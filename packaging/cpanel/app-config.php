@@ -10,7 +10,8 @@ return [
         // In cPanel mode every system account creates its own private key in HOME.
         'key' => '0000000000000000000000000000000000000000000000000000000000000000',
         'session_name' => 'axerok_mail_cpanel',
-        'session_lifetime' => 31536000,
+        'session_lifetime' => 28800,
+        'session_idle_timeout' => 1800,
     ],
     'mail' => [
         'imap_host' => '__CPANEL_HOSTNAME__',

@@ -57,6 +57,20 @@ function api_cache_delete(string $owner,string $namespace,string $key): void
     $file=api_cache_file($owner,$namespace,$key);if($file!==null&&is_file($file))@unlink($file);
 }
 
+/** @return array{0:resource,1:string,2:array<string,mixed>} */
+function api_send_lock(string $owner,string $key): array
+{
+    if(!preg_match('/^[a-f0-9-]{20,80}$/i',$key))throw new RuntimeException('La clave de envío no es válida.');
+    $directory=runtime_storage_path('send-idempotency');if(!is_dir($directory)&&!@mkdir($directory,0700,true)&&!is_dir($directory))throw new RuntimeException('No se pudo proteger el envío.');
+    $file=$directory.'/'.hash_hmac('sha256',$owner.'|'.$key,(string)config('app.key')).'.json';$handle=fopen($file,'c+');if(!$handle||!flock($handle,LOCK_EX))throw new RuntimeException('No se pudo proteger el envío.');
+    rewind($handle);$state=json_decode(stream_get_contents($handle)?:'[]',true);return [$handle,$file,is_array($state)?$state:[]];
+}
+
+function api_send_commit($handle,string $file,array $result): void
+{
+    ftruncate($handle,0);rewind($handle);fwrite($handle,json_encode(['sent_at'=>time(),'result'=>$result],JSON_THROW_ON_ERROR));fflush($handle);@chmod($file,0600);flock($handle,LOCK_UN);fclose($handle);
+}
+
 function api_require_csrf(): void
 {
     if (!hash_equals((string)($_SESSION['csrf'] ?? ''), (string)($_POST['csrf'] ?? ''))) {
@@ -81,6 +95,7 @@ $sessionPayload = static function (?string $requested = null): array {
 };
 
 if ($action === 'session') {
+    if($requestedAccount!==''&&!Credentials::has($requestedAccount))json_response(['error'=>'La cuenta solicitada ya no está disponible.'],404);
     json_response($sessionPayload($requestedAccount));
 }
 
@@ -102,6 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'logout') { api_require
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'account-switch') { api_require_csrf();$candidate=strtolower(trim((string)($_POST['email']??'')));if(!Credentials::setActive($candidate))json_response(['error'=>'La cuenta ya no está disponible.'],404);json_response($sessionPayload($candidate)); }
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'account-remove') { api_require_csrf();Credentials::remove((string)($_POST['email']??''));json_response($sessionPayload()); }
 
+if($requestedAccount!==''&&!Credentials::has($requestedAccount))json_response(['error'=>'La cuenta solicitada ya no está disponible.'],404);
 $email=Credentials::email($requestedAccount);$password=Credentials::password(app_credential_key(),$requestedAccount);
 if(!$email||!$password){json_response(['error'=>'La sesión expiró.'],401);}
 session_write_close();
@@ -114,12 +130,12 @@ try {
         $folder=(string)($_GET['folder']??'INBOX');$uid=(int)($_GET['uid']??0);$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$message=$imap->message($folder,$uid,false);$imap->close();$resolved=resolve_email_cids((string)$message['html'],(array)($message['inline']??[]),$folder,$uid,$email);header('Content-Type: text/html; charset=utf-8');header("Content-Security-Policy: default-src 'none'; img-src 'self' data: https:; style-src 'unsafe-inline'; font-src data: https:; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",true);echo safe_email_html($resolved,true);exit;
     }
     if ($action === 'send' && $_SERVER['REQUEST_METHOD']==='POST') {
-        api_require_csrf();$to=trim((string)($_POST['to']??''));$cc=trim((string)($_POST['cc']??''));$bcc=trim((string)($_POST['bcc']??''));$subject=trim((string)($_POST['subject']??''))?:'(Sin asunto)';$html=clean_composer_html((string)($_POST['body_html']??''));$body=composer_plain_text($html);$receipt=($_POST['receipt_requested']??'')==='1';$priority=(string)($_POST['priority']??'normal');if(!in_array($priority,['low','normal','high'],true))throw new RuntimeException('La prioridad no es válida.');
+        api_require_csrf();[$sendHandle,$sendFile,$sendState]=api_send_lock($email,(string)($_POST['idempotency_key']??''));if(isset($sendState['result'])&&is_array($sendState['result'])){flock($sendHandle,LOCK_UN);fclose($sendHandle);json_response($sendState['result']);}$to=trim((string)($_POST['to']??''));$cc=trim((string)($_POST['cc']??''));$bcc=trim((string)($_POST['bcc']??''));$subject=trim((string)($_POST['subject']??''))?:'(Sin asunto)';$html=clean_composer_html((string)($_POST['body_html']??''));$body=composer_plain_text($html);$receipt=($_POST['receipt_requested']??'')==='1';$priority=(string)($_POST['priority']??'normal');if(!in_array($priority,['low','normal','high'],true))throw new RuntimeException('La prioridad no es válida.');
         if($body==='')throw new RuntimeException('Escribí el contenido del mensaje.');if(unicode_length($subject)>300)throw new RuntimeException('El asunto supera 300 caracteres.');if(strlen($html)>1048576)throw new RuntimeException('El cuerpo supera 1 MB.');$attachments=api_attachments($_FILES['attachments']??[]);
         $identity=(new MailPreferenceRepository((array)config('contacts')))->preferences($email);
         $raw=(new SmtpClient((array)config('mail')))->send($email,$password,$to,$cc,$bcc,$subject,$body,$html,$receipt,$priority,$attachments,(string)$identity['display_name'],(string)$identity['reply_to'],(string)$identity['organization']);$warning='';
         try{$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$sent=null;foreach($imap->folders() as $candidate){if($candidate['special']==='sent'){$sent=$candidate['name'];break;}}if($sent!==null)$imap->append($sent,$raw);else$warning='No se encontró la carpeta Enviados.';$imap->close();}catch(Throwable){$warning='El correo salió, pero no se pudo copiar a Enviados.';}
-        (new MailPreferenceRepository((array)config('contacts')))->deleteDraft($email);json_response(['ok'=>true,'warning'=>$warning]);
+        (new MailPreferenceRepository((array)config('contacts')))->deleteDraft($email);$result=['ok'=>true,'warning'=>$warning];api_send_commit($sendHandle,$sendFile,$result);json_response($result);
     }
     if ($action === 'preferences') {
         $repo=new MailPreferenceRepository((array)config('contacts'));if($_SERVER['REQUEST_METHOD']==='POST'){api_require_csrf();$signature=clean_composer_html((string)($_POST['signature_html']??''));if(strlen($signature)>100000)throw new RuntimeException('La firma supera el límite permitido.');$identity=['display_name'=>trim((string)($_POST['display_name']??'')),'organization'=>trim((string)($_POST['organization']??'')),'reply_to'=>trim((string)($_POST['reply_to']??'')),'default_bcc'=>trim((string)($_POST['default_bcc']??'')),'view_density'=>(string)($_POST['view_density']??''),'inbox_view'=>(string)($_POST['inbox_view']??'')];foreach(['display_name','organization'] as $field)if(unicode_length($identity[$field])>160)throw new RuntimeException('Los datos personales son demasiado largos.');if($identity['reply_to']!==''&&!filter_var($identity['reply_to'],FILTER_VALIDATE_EMAIL))throw new RuntimeException('La dirección Responder a no es válida.');if(strlen($identity['default_bcc'])>1000)throw new RuntimeException('El Cco predeterminado es demasiado largo.');$repo->savePreferences($email,$signature,($_POST['receipt_default']??'')==='1',$identity);json_response(['ok'=>true]);}json_response(['preferences'=>$repo->preferences($email)]);
@@ -158,7 +174,7 @@ try {
     }
     if ($action === 'delete-message' && $_SERVER['REQUEST_METHOD']==='POST') {
         api_require_csrf();$folder=(string)($_POST['folder']??'INBOX');$uid=(int)($_POST['uid']??0);if($uid<1)throw new RuntimeException('Mensaje inválido.');
-        $imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$trash=null;foreach($imap->folders() as $candidate){if($candidate['special']==='trash'){$trash=$candidate['name'];break;}}if($trash===null)throw new RuntimeException('No se encontró la carpeta Papelera.');if($folder===$trash)throw new RuntimeException('El mensaje ya está en la Papelera.');$imap->move($folder,$uid,$trash);$imap->close();json_response(['ok'=>true]);
+        $imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$trash=null;foreach($imap->folders() as $candidate){if($candidate['special']==='trash'){$trash=$candidate['name'];break;}}if($trash===null)throw new RuntimeException('No se encontró la carpeta Papelera.');if($folder===$trash)$imap->deleteMany($folder,[$uid]);else$imap->move($folder,$uid,$trash);$imap->close();json_response(['ok'=>true,'permanent'=>$folder===$trash]);
     }
     if ($action === 'move-messages' && $_SERVER['REQUEST_METHOD']==='POST') {
         api_require_csrf();$folder=(string)($_POST['folder']??'INBOX');$destination=(string)($_POST['destination']??'');$uids=array_values(array_filter(array_map('intval',explode(',',(string)($_POST['uids']??'')))));$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$valid=false;foreach($imap->folders() as $candidate){if($candidate['name']===$destination&&!in_array('\\Noselect',$candidate['flags']??[],true)){$valid=true;break;}}if(!$valid)throw new RuntimeException('La carpeta de destino no existe.');$imap->moveMany($folder,$uids,$destination);$imap->close();json_response(['ok'=>true]);
@@ -170,13 +186,13 @@ try {
         api_require_csrf();$folder=(string)($_POST['folder']??'');$confirm=(string)($_POST['confirm']??'');$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$special=null;foreach($imap->folders() as $candidate){if($candidate['name']===$folder){$special=$candidate['special'];break;}}if(!in_array($special,['junk','trash'],true)||!hash_equals('ELIMINAR TODO',$confirm))throw new RuntimeException('La confirmación para vaciar la carpeta no es válida.');$deleted=$imap->emptyFolder($folder);$imap->close();json_response(['ok'=>true,'deleted'=>$deleted]);
     }
     if ($action === 'contacts-import' && $_SERVER['REQUEST_METHOD']==='POST') {
-        api_require_csrf();$file=$_FILES['vcard']??null;if(!is_array($file)||(int)($file['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK)throw new RuntimeException('Seleccioná un archivo vCard válido.');if((int)($file['size']??0)>2*1024*1024)throw new RuntimeException('El archivo vCard supera 2 MB.');$tmp=(string)($file['tmp_name']??'');if(!is_uploaded_file($tmp))throw new RuntimeException('El archivo recibido no es válido.');$contents=file_get_contents($tmp);if($contents===false)throw new RuntimeException('No se pudo leer el archivo vCard.');$cards=VCard::parse($contents);if($cards===[])throw new RuntimeException('El archivo no contiene contactos importables.');if(count($cards)>5000)throw new RuntimeException('El archivo contiene demasiados contactos.');$repo=new ContactRepository((array)config('contacts'));$stats=['created'=>0,'updated'=>0,'invalid'=>0];foreach($cards as $card){$result=$repo->upsert($email,$card);$stats[$result]++;}json_response(['ok'=>true,'stats'=>$stats]);
+        api_require_csrf();$file=$_FILES['vcard']??null;if(!is_array($file)||(int)($file['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK)throw new RuntimeException('Seleccioná un archivo vCard válido.');if((int)($file['size']??0)>2*1024*1024)throw new RuntimeException('El archivo vCard supera 2 MB.');$tmp=(string)($file['tmp_name']??'');if(!is_uploaded_file($tmp))throw new RuntimeException('El archivo recibido no es válido.');$contents=file_get_contents($tmp);if($contents===false)throw new RuntimeException('No se pudo leer el archivo vCard.');$cards=VCard::parse($contents);if($cards===[])throw new RuntimeException('El archivo no contiene contactos importables.');if(count($cards)>5000)throw new RuntimeException('El archivo contiene demasiados contactos.');$stats=(new ContactRepository((array)config('contacts')))->import($email,$cards);json_response(['ok'=>true,'stats'=>$stats]);
     }
     if ($action === 'roundcube-status') {
-        try{json_response(['available'=>true,'status'=>(new RoundcubeReader($email))->status()]);}catch(Throwable $readerError){json_response(['available'=>false,'reason'=>$readerError->getMessage()]);}
+        try{json_response(['available'=>true,'status'=>(new RoundcubeReader($email))->status()]);}catch(Throwable){json_response(['available'=>false,'reason'=>'No se encontró una instalación compatible de Roundcube.']);}
     }
     if ($action === 'roundcube-import' && $_SERVER['REQUEST_METHOD']==='POST') {
-        api_require_csrf();$includeCollected=($_POST['collected']??'')==='1';$includeIdentity=($_POST['identity']??'')==='1';$source=(new RoundcubeReader($email))->read($includeCollected,$includeIdentity);$repo=new ContactRepository((array)config('contacts'));$stats=['created'=>0,'updated'=>0,'invalid'=>0];foreach($source['contacts'] as $contact){$result=$repo->upsert($email,$contact);$stats[$result]++;}
+        api_require_csrf();$includeCollected=($_POST['collected']??'')==='1';$includeIdentity=($_POST['identity']??'')==='1';$source=(new RoundcubeReader($email))->read($includeCollected,$includeIdentity);$stats=(new ContactRepository((array)config('contacts')))->import($email,$source['contacts']);
         if($includeIdentity&&is_array($source['identity'])){$preferences=new MailPreferenceRepository((array)config('contacts'));$current=$preferences->preferences($email);$identity=$source['identity'];$signature=clean_composer_html((string)$identity['signature_html']);$preferences->savePreferences($email,$signature,(bool)$current['receipt_default'],[...$current,...$identity]);}
         json_response(['ok'=>true,'stats'=>$stats,'identity_imported'=>$includeIdentity&&is_array($source['identity'])]);
     }
@@ -186,5 +202,5 @@ try {
     if ($action === 'contacts') { json_response(['contacts'=>(new ContactRepository((array)config('contacts')))->all($email)]); }
     json_response(['error'=>'Ruta inexistente.'],404);
 } catch(Throwable $e) {
-    error_log('[AxerOK Mail API] '.str_replace(["\r","\n"],' ',$e->getMessage()));json_response(['error'=>$e instanceof MailException?$e->getMessage():'No se pudo completar la operación.'],500);
+    $incident=bin2hex(random_bytes(6));error_log('[AxerOK Mail API '.$incident.'] '.str_replace(["\r","\n"],' ',$e->getMessage()));json_response(['error'=>'No se pudo completar la operación.','incident'=>$incident],500);
 }

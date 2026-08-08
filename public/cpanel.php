@@ -23,6 +23,9 @@ try {
     $imap->connect($email, $password);
     $imap->close();
     Credentials::store($email, $password, app_credential_key());
+    $cpanelToken=(string)($_SERVER['cp_security_token']??getenv('cp_security_token')?:'');
+    if(!preg_match('#^/cpsess[0-9]+$#',$cpanelToken))throw new RuntimeException('La sesión de cPanel no es válida.');
+    $_SESSION['cpanel_token_hash']=hash('sha256',$cpanelToken);
 } catch (Throwable $error) {
     error_log('[AxerOK Mail cPanel] Authentication bootstrap failed: ' . str_replace(["\r", "\n"], ' ', $error->getMessage()));
     http_response_code(401);

@@ -10,6 +10,7 @@ final class ContactRepository
     {
         $this->db = new \PDO((string)$config['dsn'], $config['username'] ?? null, $config['password'] ?? null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC]);
         $driver=$this->db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        if($driver==='sqlite'){$this->db->exec('PRAGMA busy_timeout=5000');$this->db->exec('PRAGMA journal_mode=WAL');}
         $id=$driver==='mysql'?'BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY':'INTEGER PRIMARY KEY AUTOINCREMENT';
         $this->db->exec("CREATE TABLE IF NOT EXISTS contacts (id {$id}, owner VARCHAR(255) NOT NULL, email VARCHAR(320) NOT NULL, name VARCHAR(255) NOT NULL DEFAULT '', phone VARCHAR(80) NOT NULL DEFAULT '', organization VARCHAR(255) NOT NULL DEFAULT '', created_at VARCHAR(32) NOT NULL, updated_at VARCHAR(32) NOT NULL, UNIQUE(owner,email))");
     }
@@ -17,8 +18,19 @@ final class ContactRepository
     public function upsert(string $owner, array $contact): string
     {
         $email=strtolower(trim((string)($contact['email']??''))); if(!filter_var($email,FILTER_VALIDATE_EMAIL)){return 'invalid';}
-        $existing=$this->db->prepare('SELECT id FROM contacts WHERE owner=? AND email=?');$existing->execute([$owner,$email]);$now=date(DATE_ATOM);
-        if($existing->fetchColumn()){$s=$this->db->prepare('UPDATE contacts SET name=?,phone=?,organization=?,updated_at=? WHERE owner=? AND email=?');$s->execute([(string)($contact['name']??''),(string)($contact['phone']??''),(string)($contact['organization']??''),$now,$owner,$email]);return 'updated';}
-        $s=$this->db->prepare('INSERT INTO contacts(owner,email,name,phone,organization,created_at,updated_at) VALUES(?,?,?,?,?,?,?)');$s->execute([$owner,$email,(string)($contact['name']??''),(string)($contact['phone']??''),(string)($contact['organization']??''),$now,$now]);return 'created';
+        $name=trim((string)($contact['name']??''));$phone=trim((string)($contact['phone']??''));$organization=trim((string)($contact['organization']??''));
+        if(self::length($name)>255||self::length($phone)>80||self::length($organization)>255)return 'invalid';
+        $existing=$this->db->prepare('SELECT id FROM contacts WHERE owner=? AND email=?');$existing->execute([$owner,$email]);$wasExisting=(bool)$existing->fetchColumn();$now=date(DATE_ATOM);$driver=$this->db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        if($driver==='mysql'){$s=$this->db->prepare('INSERT INTO contacts(owner,email,name,phone,organization,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name),phone=VALUES(phone),organization=VALUES(organization),updated_at=VALUES(updated_at)');}
+        else{$s=$this->db->prepare('INSERT INTO contacts(owner,email,name,phone,organization,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(owner,email) DO UPDATE SET name=excluded.name,phone=excluded.phone,organization=excluded.organization,updated_at=excluded.updated_at');}
+        $s->execute([$owner,$email,$name,$phone,$organization,$now,$now]);return $wasExisting?'updated':'created';
     }
+
+    public function import(string $owner,array $contacts): array
+    {
+        $stats=['created'=>0,'updated'=>0,'invalid'=>0];$this->db->beginTransaction();
+        try{foreach($contacts as $contact){$result=$this->upsert($owner,$contact);$stats[$result]++;}$this->db->commit();return $stats;}catch(\Throwable $error){if($this->db->inTransaction())$this->db->rollBack();throw $error;}
+    }
+
+    private static function length(string $value): int { return function_exists('mb_strlen')?mb_strlen($value,'UTF-8'):strlen($value); }
 }

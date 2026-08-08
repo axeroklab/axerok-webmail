@@ -17,6 +17,7 @@ final class SmtpClient
         if (count($recipients) > 50) { throw new MailException('El mensaje supera el límite de 50 destinatarios.'); }
         $host = (string)$this->options['smtp_host']; $port = (int)$this->options['smtp_port'];
         $encryption = (string)($this->options['smtp_encryption'] ?? 'ssl');
+        if(!in_array($encryption,['ssl','tls'],true))throw new MailException('SMTP requiere una conexión TLS segura.');
         $context = stream_context_create(['ssl' => ['verify_peer' => !($this->options['allow_self_signed'] ?? false), 'verify_peer_name' => !($this->options['allow_self_signed'] ?? false), 'allow_self_signed' => (bool)($this->options['allow_self_signed'] ?? false), 'peer_name' => $host]]);
         $this->socket = @stream_socket_client(($encryption === 'ssl' ? 'ssl://' : 'tcp://') . $host . ':' . $port, $errno, $error, 15, STREAM_CLIENT_CONNECT, $context);
         if (!is_resource($this->socket)) { throw new MailException("No se pudo conectar con SMTP: {$error} ({$errno})"); }

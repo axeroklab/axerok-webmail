@@ -51,10 +51,12 @@ header('Referrer-Policy: no-referrer');
 header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()');
 header('Cross-Origin-Opener-Policy: same-origin');
 header('Cross-Origin-Resource-Policy: same-origin');
+header('Strict-Transport-Security: max-age=31536000');
 header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; frame-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'");
 
 ini_set('session.use_strict_mode', '1');
-$sessionLifetime=max(86400,(int)($config['app']['session_lifetime']??31536000));
+$sessionLifetime=max(1800,(int)($config['app']['session_lifetime']??28800));
+$sessionIdle=max(900,(int)($config['app']['session_idle_timeout']??1800));
 ini_set('session.gc_maxlifetime',(string)$sessionLifetime);
 $runtimeClass='AxerokMail\\Runtime';
 $sessionDirectory=$runtimeClass::storage('sessions');
@@ -69,12 +71,20 @@ session_set_cookie_params([
 ]);
 session_start();
 
+if($runtimeClass::isCpanel()&&isset($_SESSION['cpanel_token_hash'])){
+    $cpanelToken=(string)($_SERVER['cp_security_token']??getenv('cp_security_token')?:'');
+    if(!preg_match('#^/cpsess[0-9]+$#',$cpanelToken)||!hash_equals((string)$_SESSION['cpanel_token_hash'],hash('sha256',$cpanelToken))){$_SESSION=[];session_regenerate_id(true);}
+}
+
 if($runtimeClass::isCpanel()){
     $database=$runtimeClass::storage('axerok.sqlite');
     $config['contacts']=['dsn'=>'sqlite:'.$database,'username'=>null,'password'=>null];
 }
 
 $now = time();
+if(isset($_SESSION['last_activity'])&&$now-(int)$_SESSION['last_activity']>$sessionIdle){
+    $_SESSION=[];session_regenerate_id(true);
+}
 if (!isset($_SESSION['rotated_at']) || $now - (int)$_SESSION['rotated_at'] > 86400) {
     session_regenerate_id(true);
     $_SESSION['rotated_at']=$now;

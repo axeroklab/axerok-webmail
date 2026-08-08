@@ -17,6 +17,7 @@ final class ImapClient
         $host = (string)$this->options['imap_host'];
         $port = (int)$this->options['imap_port'];
         $encryption = (string)($this->options['imap_encryption'] ?? 'ssl');
+        if(!in_array($encryption,['ssl','tls'],true))throw new MailException('IMAP requiere una conexión TLS segura.');
         $transport = $encryption === 'ssl' ? 'ssl://' : 'tcp://';
         $context = stream_context_create(['ssl' => [
             'verify_peer' => !($this->options['allow_self_signed'] ?? false),
@@ -141,6 +142,7 @@ final class ImapClient
                     $uids = array_values(array_filter(array_map('intval', preg_split('/\s+/', trim(substr($line, 8))) ?: [])));
                 }
             }
+            if(count($uids)>10000)throw new MailException('La búsqueda devuelve demasiados resultados. Agregá más filtros.');
             rsort($uids, SORT_NUMERIC);
             $this->lastMailboxTotal = count($uids);
             $uids = array_slice($uids, max(0, ($page - 1) * $pageSize), $pageSize);
@@ -294,16 +296,16 @@ final class ImapClient
         if($uids===[]||count($uids)>100)throw new MailException('La selección de mensajes no es válida.');
         $this->select($folder);
         $this->command('UID STORE '.implode(',',$uids).' +FLAGS.SILENT (\\Deleted)');
-        $this->command('EXPUNGE');
+        $this->command('UID EXPUNGE '.implode(',',$uids));
     }
 
     public function emptyFolder(string $folder): int
     {
-        $status=$this->select($folder);$count=(int)$status['exists'];
-        if($count===0)return 0;
-        $this->command('STORE 1:* +FLAGS.SILENT (\\Deleted)');
-        $this->command('EXPUNGE');
-        return $count;
+        $this->select($folder);$search=$this->command('UID SEARCH ALL');$uids=[];
+        foreach($search as $line)if(str_starts_with($line,'* SEARCH'))$uids=array_values(array_filter(array_map('intval',preg_split('/\s+/',trim(substr($line,8)))?:[])));
+        if($uids===[])return 0;
+        foreach(array_chunk($uids,100) as $chunk){$set=implode(',',$chunk);$this->command('UID STORE '.$set.' +FLAGS.SILENT (\\Deleted)');$this->command('UID EXPUNGE '.$set);}
+        return count($uids);
     }
 
     public function append(string $folder, string $rawMessage): void
@@ -343,8 +345,9 @@ final class ImapClient
     private function readLine(): string
     {
         if (!is_resource($this->socket)) { throw new MailException('Conexión IMAP cerrada.'); }
-        $line = fgets($this->socket);
+        $line = fgets($this->socket, 8 * 1024 * 1024);
         if ($line === false) { throw new MailException('El servidor IMAP cerró la conexión.'); }
+        if(!str_ends_with($line,"\n")&&!feof($this->socket))throw new MailException('El servidor IMAP devolvió una línea demasiado grande.');
         return rtrim($line, "\r\n");
     }
 
