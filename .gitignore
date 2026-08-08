@@ -1,0 +1,35 @@
+# Secrets and local runtime configuration
+/.env
+/.env.*
+!/.env.example
+/config/config.php
+/storage/*
+!/storage/.gitkeep
+
+# Dependencies and generated caches
+/vendor/
+/node_modules/
+/frontend/node_modules/
+/frontend/.vite/
+/frontend/*.tsbuildinfo
+/frontend/vite.config.js
+/frontend/vite.config.d.ts
+/.phpunit.cache/
+/.phpunit.result.cache
+/.cache/
+/tmp/
+/release/
+*.log
+
+# Operating systems, editors, and local tool metadata
+/.*
+!/.gitignore
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Private working notes
+/*-memory/
+/*.private.md
