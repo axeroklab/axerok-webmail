@@ -191,6 +191,16 @@ final class ImapClient
         return preg_match('/<[^<>\s]+>/', $message, $match)?strtolower($match[0]):'';
     }
 
+    /** @return array<int,int> */
+    public function threadUids(string $folder,string $threadId,int $limit=30): array
+    {
+        if(!preg_match('/^<[^<>\s]{1,998}>$/',$threadId))throw new MailException('Identificador de conversación inválido.');
+        $this->select($folder);$quoted='"'.str_replace(['\\','"'],['\\\\','\\"'],$threadId).'"';
+        $response=$this->command('UID SEARCH OR OR HEADER Message-ID '.$quoted.' HEADER In-Reply-To '.$quoted.' HEADER References '.$quoted);$uids=[];
+        foreach($response as $line)if(str_starts_with($line,'* SEARCH'))$uids=array_values(array_filter(array_map('intval',preg_split('/\s+/',trim(substr($line,8)))?:[])));
+        sort($uids,SORT_NUMERIC);return array_slice(array_values(array_unique($uids)),max(0,count($uids)-max(1,min(50,$limit))));
+    }
+
     public static function searchCriteria(string $query, bool $searchBody = false): string
     {
         $quoted = '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], $query) . '"';
@@ -241,7 +251,7 @@ final class ImapClient
         }
         $attachments=array_map(static fn(array $part):array=>['name'=>MimeParser::decodeParameter((string)$part['name']),'type'=>$part['type'],'size'=>$part['size'],'section'=>$part['section']],$description['attachments']);
         $inline=array_map(static fn(array $part):array=>['name'=>MimeParser::decodeParameter((string)$part['name']),'type'=>$part['type'],'size'=>$part['size'],'section'=>$part['section'],'content_id'=>$part['content_id']],$description['inline']);
-        return ['uid'=>$uid,'from'=>MimeParser::decodeHeader($headers['from']??''),'to'=>MimeParser::decodeHeader($headers['to']??''),'cc'=>MimeParser::decodeHeader($headers['cc']??''),'subject'=>MimeParser::decodeHeader($headers['subject']??'(Sin asunto)'),'date'=>$headers['date']??'','message_id'=>$headers['message-id']??'','html'=>$html,'text'=>$text,'attachments'=>$attachments,'inline'=>$inline];
+        return ['uid'=>$uid,'from'=>MimeParser::decodeHeader($headers['from']??''),'to'=>MimeParser::decodeHeader($headers['to']??''),'cc'=>MimeParser::decodeHeader($headers['cc']??''),'subject'=>MimeParser::decodeHeader($headers['subject']??'(Sin asunto)'),'date'=>$headers['date']??'','message_id'=>$headers['message-id']??'','thread_id'=>self::threadIdFromHeaders($headers),'html'=>$html,'text'=>$text,'attachments'=>$attachments,'inline'=>$inline];
     }
 
     /** @return array{name:string,type:string,size:int,section:string,data:string} */
