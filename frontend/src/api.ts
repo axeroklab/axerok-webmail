@@ -54,9 +54,9 @@ export const api = {
   exportContacts: () => request<{filename:string;contents:string}>('contacts-export'),
   preferences: () => request<{preferences:Preferences}>('preferences'),
   savePreferences: (preferences:Preferences,csrf:string) => { const body=new FormData();Object.entries(preferences).forEach(([key,value])=>body.set(key,value===true?'1':value===false?'0':String(value)));body.set('csrf',csrf);return request<{ok:boolean}>('preferences',{}, {method:'POST',body}); },
-  draft: () => request<{draft:Draft|null}>('draft'),
-  saveDraft: (draft:Draft,csrf:string) => {const body=new FormData();Object.entries(draft).forEach(([key,value])=>body.set(key,value===true?'1':value===false?'0':String(value)));body.set('csrf',csrf);return request<{ok:boolean}>('draft',{}, {method:'POST',body});},
-  deleteDraft: (csrf:string) => request<{ok:boolean}>('draft',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({csrf})}),
+  drafts: () => request<{drafts:Draft[]}>('draft'),
+  saveDraft: (draft:Draft,csrf:string) => {const body=new FormData();Object.entries(draft).forEach(([key,value])=>body.set(key,value===true?'1':value===false?'0':String(value)));body.set('csrf',csrf);return request<{ok:boolean;draft:Draft}>('draft',{}, {method:'POST',body});},
+  deleteDraft: (id:string,csrf:string) => request<{ok:boolean}>('draft',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf})}),
   send: (body:FormData) => request<{ok:boolean;warning:string}>('send',{}, {method:'POST',body}),
   logout: (csrf:string) => {const body=new FormData();body.set('csrf',csrf);return request<{ok:boolean}>('logout',{}, {method:'POST',body});},
 };

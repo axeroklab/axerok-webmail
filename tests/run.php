@@ -92,6 +92,11 @@ if(class_exists(SQLite3::class)){
     $preferenceRepository=new MailPreferenceRepository($sqliteConfig);
     $preferenceRepository->savePreferences('owner@example.com','<b>Firma</b>',true,['display_name'=>'Ana']);
     $assert($preferenceRepository->preferences('owner@example.com')['display_name']==='Ana','SQLite preferences save');
+    $firstDraft=$preferenceRepository->saveDraft('owner@example.com',['id'=>'11111111-1111-4111-8111-111111111111','to'=>'one@example.com','subject'=>'Uno']);
+    $secondDraft=$preferenceRepository->saveDraft('owner@example.com',['id'=>'22222222-2222-4222-8222-222222222222','to'=>'two@example.com','subject'=>'Dos']);
+    $assert(count($preferenceRepository->drafts('owner@example.com'))===2&&$firstDraft['id']!==$secondDraft['id'],'multiple persistent drafts');
+    $preferenceRepository->deleteDraft('owner@example.com',(string)$firstDraft['id']);
+    $assert(count($preferenceRepository->drafts('owner@example.com'))===1,'delete one draft only');
     unlink($appDatabase);
 }
 

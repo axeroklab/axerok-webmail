@@ -15,6 +15,7 @@ final class MailPreferenceRepository
         foreach(["display_name VARCHAR(160) NOT NULL DEFAULT ''","organization VARCHAR(160) NOT NULL DEFAULT ''","reply_to VARCHAR(255) NOT NULL DEFAULT ''","default_bcc VARCHAR(1000) NOT NULL DEFAULT ''","view_density VARCHAR(16) NOT NULL DEFAULT 'comfortable'","inbox_view VARCHAR(20) NOT NULL DEFAULT 'categories'"] as $column)$this->ensureColumn('mail_preferences',$column);
         $this->db->exec("CREATE TABLE IF NOT EXISTS mail_drafts (owner VARCHAR(255) PRIMARY KEY, recipients_to TEXT NOT NULL, recipients_cc TEXT NOT NULL, recipients_bcc TEXT NOT NULL, subject VARCHAR(300) NOT NULL, body_html TEXT NOT NULL, receipt_requested INTEGER NOT NULL DEFAULT 0, updated_at VARCHAR(32) NOT NULL)");
         $this->ensureColumn('mail_drafts',"priority VARCHAR(10) NOT NULL DEFAULT 'normal'");
+        $this->db->exec("CREATE TABLE IF NOT EXISTS mail_drafts_v2 (id VARCHAR(64) NOT NULL, owner VARCHAR(255) NOT NULL, recipients_to TEXT NOT NULL, recipients_cc TEXT NOT NULL, recipients_bcc TEXT NOT NULL, subject VARCHAR(300) NOT NULL, body_html TEXT NOT NULL, receipt_requested INTEGER NOT NULL DEFAULT 0, priority VARCHAR(10) NOT NULL DEFAULT 'normal', updated_at VARCHAR(32) NOT NULL, PRIMARY KEY(owner,id))");
     }
 
     /** @return array<string,mixed> */
@@ -32,19 +33,26 @@ final class MailPreferenceRepository
         try{$s=$this->db->prepare('INSERT INTO mail_preferences(owner,signature_html,receipt_default,display_name,organization,reply_to,default_bcc,view_density,inbox_view,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)');$s->execute([$owner,$signatureHtml,$receiptDefault?1:0,...$values,$now]);}catch(\PDOException){$updated->execute([$signatureHtml,$receiptDefault?1:0,...$values,$now,$owner]);}
     }
 
-    public function draft(string $owner): ?array
+    /** @return array<int,array<string,mixed>> */
+    public function drafts(string $owner): array
     {
-        $s=$this->db->prepare('SELECT recipients_to AS `to`,recipients_cc AS cc,recipients_bcc AS bcc,subject,body_html,receipt_requested,priority,updated_at FROM mail_drafts WHERE owner=?');$s->execute([$owner]);$row=$s->fetch();return $row?:null;
+        $this->importLegacyDraft($owner);$s=$this->db->prepare('SELECT id,recipients_to AS `to`,recipients_cc AS cc,recipients_bcc AS bcc,subject,body_html,receipt_requested,priority,updated_at FROM mail_drafts_v2 WHERE owner=? ORDER BY updated_at DESC');$s->execute([$owner]);return $s->fetchAll()?:[];
     }
 
-    public function saveDraft(string $owner,array $draft): void
+    /** @return array<string,mixed> */
+    public function saveDraft(string $owner,array $draft): array
     {
-        $priority=in_array(($draft['priority']??'normal'),['low','normal','high'],true)?(string)$draft['priority']:'normal';$values=[(string)($draft['to']??''),(string)($draft['cc']??''),(string)($draft['bcc']??''),(string)($draft['subject']??''),(string)($draft['body_html']??''),!empty($draft['receipt_requested'])?1:0,$priority,date(DATE_ATOM)];
-        $updated=$this->db->prepare('UPDATE mail_drafts SET recipients_to=?,recipients_cc=?,recipients_bcc=?,subject=?,body_html=?,receipt_requested=?,priority=?,updated_at=? WHERE owner=?');$updated->execute([...$values,$owner]);if($updated->rowCount()>0)return;
-        try{$s=$this->db->prepare('INSERT INTO mail_drafts(owner,recipients_to,recipients_cc,recipients_bcc,subject,body_html,receipt_requested,priority,updated_at) VALUES(?,?,?,?,?,?,?,?,?)');$s->execute([$owner,...$values]);}catch(\PDOException){$updated->execute([...$values,$owner]);}
+        $id=(string)($draft['id']??'');if(!preg_match('/^[a-zA-Z0-9-]{16,64}$/',$id))$id=bin2hex(random_bytes(16));$priority=in_array(($draft['priority']??'normal'),['low','normal','high'],true)?(string)$draft['priority']:'normal';$values=[(string)($draft['to']??''),(string)($draft['cc']??''),(string)($draft['bcc']??''),(string)($draft['subject']??''),(string)($draft['body_html']??''),!empty($draft['receipt_requested'])?1:0,$priority,date(DATE_ATOM)];
+        $updated=$this->db->prepare('UPDATE mail_drafts_v2 SET recipients_to=?,recipients_cc=?,recipients_bcc=?,subject=?,body_html=?,receipt_requested=?,priority=?,updated_at=? WHERE owner=? AND id=?');$updated->execute([...$values,$owner,$id]);if($updated->rowCount()===0){try{$s=$this->db->prepare('INSERT INTO mail_drafts_v2(id,owner,recipients_to,recipients_cc,recipients_bcc,subject,body_html,receipt_requested,priority,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)');$s->execute([$id,$owner,...$values]);}catch(\PDOException){$updated->execute([...$values,$owner,$id]);}}
+        return ['id'=>$id,'to'=>$values[0],'cc'=>$values[1],'bcc'=>$values[2],'subject'=>$values[3],'body_html'=>$values[4],'receipt_requested'=>(bool)$values[5],'priority'=>$priority,'updated_at'=>$values[7]];
     }
 
-    public function deleteDraft(string $owner): void { $s=$this->db->prepare('DELETE FROM mail_drafts WHERE owner=?');$s->execute([$owner]); }
+    public function deleteDraft(string $owner,string $id=''): void {if($id==='')return;$s=$this->db->prepare('DELETE FROM mail_drafts_v2 WHERE owner=? AND id=?');$s->execute([$owner,$id]);}
+
+    private function importLegacyDraft(string $owner): void
+    {
+        $check=$this->db->prepare('SELECT 1 FROM mail_drafts_v2 WHERE owner=? LIMIT 1');$check->execute([$owner]);if($check->fetchColumn())return;$legacy=$this->db->prepare('SELECT recipients_to,recipients_cc,recipients_bcc,subject,body_html,receipt_requested,priority,updated_at FROM mail_drafts WHERE owner=?');$legacy->execute([$owner]);$row=$legacy->fetch();if(!$row)return;$insert=$this->db->prepare('INSERT INTO mail_drafts_v2(id,owner,recipients_to,recipients_cc,recipients_bcc,subject,body_html,receipt_requested,priority,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)');$insert->execute([bin2hex(random_bytes(16)),$owner,$row['recipients_to'],$row['recipients_cc'],$row['recipients_bcc'],$row['subject'],$row['body_html'],$row['receipt_requested'],$row['priority'],$row['updated_at']]);
+    }
 
     private function ensureColumn(string $table,string $definition): void
     {
