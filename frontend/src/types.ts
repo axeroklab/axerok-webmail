@@ -1,4 +1,4 @@
-export type Session = { authenticated: boolean; email: string | null; accounts:string[];csrf: string;version:string;webmail_home_url?:string|null };
+export type Session = { authenticated: boolean; email: string | null; accounts:string[];csrf: string;version:string;page_size:number;webmail_home_url?:string|null };
 export type Folder = { name: string; special: string | null;delimiter?:string;flags?:string[] };
 export type Label = {id:number;name:string;color:string;keyword:string};
 export type SearchFilters = {from:string;to:string;subject:string;contains:string;exclude:string;status:'all'|'unread'|'read'|'flagged';size_op:''|'larger'|'smaller';size_value:string;size_unit:'KB'|'MB';since:string;before:string;has_attachment:boolean};

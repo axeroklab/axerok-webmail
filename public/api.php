@@ -91,7 +91,7 @@ $action = (string)($_GET['action'] ?? 'session');
 $requestedAccount = strtolower(trim((string)($_SERVER['HTTP_X_AXEROK_ACCOUNT'] ?? $_GET['account'] ?? '')));
 $sessionPayload = static function (?string $requested = null): array {
     $email=Credentials::email($requested);
-    return ['authenticated'=>$email!==null,'email'=>$email,'accounts'=>Credentials::accounts(),'csrf'=>(string)$_SESSION['csrf'],'version'=>(string)config('app.version','0.4.0-preview14'),'webmail_home_url'=>\AxerokMail\Runtime::webmailHomeUrl()];
+    return ['authenticated'=>$email!==null,'email'=>$email,'accounts'=>Credentials::accounts(),'csrf'=>(string)$_SESSION['csrf'],'version'=>(string)config('app.version','0.4.0-preview14'),'page_size'=>max(10,min(100,(int)config('mail.page_size',40))),'webmail_home_url'=>\AxerokMail\Runtime::webmailHomeUrl()];
 };
 
 if ($action === 'session') {
