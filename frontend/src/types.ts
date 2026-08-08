@@ -6,5 +6,6 @@ export type MailRow = { uid: number;folder:string; from: string; subject: string
 export type Message = { uid: number; from: string; to: string; cc:string; subject: string; date: string;message_id?:string;thread_id?:string; text: string; html: string };
 export type Preferences = { signature_html:string;receipt_default:boolean;display_name:string;organization:string;reply_to:string;default_bcc:string;view_density:'default'|'comfortable'|'compact';inbox_view:'default'|'categories'|'unread'|'starred' };
 export type Draft = { id:string;to:string;cc:string;bcc:string;subject:string;body_html:string;receipt_requested:boolean;priority:'low'|'normal'|'high';updated_at?:string };
+export type MailTemplate = {id:string;name:string;subject:string;body_html:string;updated_at?:string};
 export type Contact = { id:number;email:string;name:string;phone:string;organization:string };
 export type Attachment = {name:string;type:string;size:number;url:string};

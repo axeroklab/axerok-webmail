@@ -97,6 +97,10 @@ if(class_exists(SQLite3::class)){
     $assert(count($preferenceRepository->drafts('owner@example.com'))===2&&$firstDraft['id']!==$secondDraft['id'],'multiple persistent drafts');
     $preferenceRepository->deleteDraft('owner@example.com',(string)$firstDraft['id']);
     $assert(count($preferenceRepository->drafts('owner@example.com'))===1,'delete one draft only');
+    $template=$preferenceRepository->saveTemplate('owner@example.com',['name'=>'Respuesta comercial','subject'=>'Propuesta','body_html'=>'<p>Hola</p>']);
+    $assert(count($preferenceRepository->templates('owner@example.com'))===1&&$template['name']==='Respuesta comercial','persistent mail template');
+    $preferenceRepository->deleteTemplate('owner@example.com',(string)$template['id']);
+    $assert($preferenceRepository->templates('owner@example.com')===[],'delete mail template');
     unlink($appDatabase);
 }
 

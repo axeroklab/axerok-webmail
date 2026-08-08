@@ -101,7 +101,7 @@ bandeja, búsqueda IMAP rápida y búsqueda avanzada por carpeta, lectura segura
 imágenes remotas con autorización, descarga de adjuntos,
 selección y eliminación múltiple, vaciado seguro de Spam/Papelera, archivo, movimiento,
 paginación, responder, responder a todos, reenviar, papelera, redacción HTML por SMTP,
-CC/CCO, autocompletado desde Contactos, adjuntos acumulables por selector o arrastrar y soltar, copia en Enviados,
+CC/CCO, autocompletado desde Contactos, plantillas reutilizables, adjuntos acumulables por selector o arrastrar y soltar, copia en Enviados,
 acuse de lectura, firmas, identidad, borradores automáticos, densidad y tipos de
 bandeja, cuentas múltiples por pestaña y contactos con importación vCard o lectura
 opcional de la SQLite de Roundcube. PHP 8.3 continúa como API segura para cPanel.

@@ -1,4 +1,4 @@
-import type { Attachment, Contact, Draft, Folder, Label, MailRow, Message, Preferences, SearchFilters, Session } from './types';
+import type { Attachment, Contact, Draft, Folder, Label, MailRow, MailTemplate, Message, Preferences, SearchFilters, Session } from './types';
 
 const endpoint = new URL('api.php', window.location.href).pathname;
 
@@ -57,6 +57,9 @@ export const api = {
   drafts: () => request<{drafts:Draft[]}>('draft'),
   saveDraft: (draft:Draft,csrf:string) => {const body=new FormData();Object.entries(draft).forEach(([key,value])=>body.set(key,value===true?'1':value===false?'0':String(value)));body.set('csrf',csrf);return request<{ok:boolean;draft:Draft}>('draft',{}, {method:'POST',body});},
   deleteDraft: (id:string,csrf:string) => request<{ok:boolean}>('draft',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf})}),
+  templates:()=>request<{templates:MailTemplate[]}>('templates'),
+  saveTemplate:(template:Pick<MailTemplate,'name'|'subject'|'body_html'>,csrf:string)=>{const body=new FormData();Object.entries(template).forEach(([key,value])=>body.set(key,value));body.set('csrf',csrf);return request<{ok:boolean;template:MailTemplate;templates:MailTemplate[]}>('templates',{}, {method:'POST',body});},
+  deleteTemplate:(id:string,csrf:string)=>request<{ok:boolean;templates:MailTemplate[]}>('templates',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf})}),
   send: (body:FormData) => request<{ok:boolean;warning:string}>('send',{}, {method:'POST',body}),
   logout: (csrf:string) => {const body=new FormData();body.set('csrf',csrf);return request<{ok:boolean}>('logout',{}, {method:'POST',body});},
 };

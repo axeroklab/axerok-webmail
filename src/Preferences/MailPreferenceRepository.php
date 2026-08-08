@@ -16,6 +16,7 @@ final class MailPreferenceRepository
         $this->db->exec("CREATE TABLE IF NOT EXISTS mail_drafts (owner VARCHAR(255) PRIMARY KEY, recipients_to TEXT NOT NULL, recipients_cc TEXT NOT NULL, recipients_bcc TEXT NOT NULL, subject VARCHAR(300) NOT NULL, body_html TEXT NOT NULL, receipt_requested INTEGER NOT NULL DEFAULT 0, updated_at VARCHAR(32) NOT NULL)");
         $this->ensureColumn('mail_drafts',"priority VARCHAR(10) NOT NULL DEFAULT 'normal'");
         $this->db->exec("CREATE TABLE IF NOT EXISTS mail_drafts_v2 (id VARCHAR(64) NOT NULL, owner VARCHAR(255) NOT NULL, recipients_to TEXT NOT NULL, recipients_cc TEXT NOT NULL, recipients_bcc TEXT NOT NULL, subject VARCHAR(300) NOT NULL, body_html TEXT NOT NULL, receipt_requested INTEGER NOT NULL DEFAULT 0, priority VARCHAR(10) NOT NULL DEFAULT 'normal', updated_at VARCHAR(32) NOT NULL, PRIMARY KEY(owner,id))");
+        $this->db->exec("CREATE TABLE IF NOT EXISTS mail_templates (id VARCHAR(64) NOT NULL, owner VARCHAR(255) NOT NULL, name VARCHAR(120) NOT NULL, subject VARCHAR(300) NOT NULL, body_html TEXT NOT NULL, updated_at VARCHAR(32) NOT NULL, PRIMARY KEY(owner,id))");
     }
 
     /** @return array<string,mixed> */
@@ -53,6 +54,18 @@ final class MailPreferenceRepository
     {
         $check=$this->db->prepare('SELECT 1 FROM mail_drafts_v2 WHERE owner=? LIMIT 1');$check->execute([$owner]);if($check->fetchColumn())return;$legacy=$this->db->prepare('SELECT recipients_to,recipients_cc,recipients_bcc,subject,body_html,receipt_requested,priority,updated_at FROM mail_drafts WHERE owner=?');$legacy->execute([$owner]);$row=$legacy->fetch();if(!$row)return;$insert=$this->db->prepare('INSERT INTO mail_drafts_v2(id,owner,recipients_to,recipients_cc,recipients_bcc,subject,body_html,receipt_requested,priority,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)');$insert->execute([bin2hex(random_bytes(16)),$owner,$row['recipients_to'],$row['recipients_cc'],$row['recipients_bcc'],$row['subject'],$row['body_html'],$row['receipt_requested'],$row['priority'],$row['updated_at']]);
     }
+
+    /** @return array<int,array<string,mixed>> */
+    public function templates(string $owner): array {$s=$this->db->prepare('SELECT id,name,subject,body_html,updated_at FROM mail_templates WHERE owner=? ORDER BY name');$s->execute([$owner]);return $s->fetchAll()?:[];}
+
+    /** @return array<string,mixed> */
+    public function saveTemplate(string $owner,array $template): array
+    {
+        $id=(string)($template['id']??'');if(!preg_match('/^[a-zA-Z0-9-]{16,64}$/',$id))$id=bin2hex(random_bytes(16));$name=trim((string)($template['name']??''));if($name===''||strlen($name)>240)throw new \RuntimeException('El nombre de la plantilla no es válido.');$subject=substr((string)($template['subject']??''),0,300);$body=(string)($template['body_html']??'');$updatedAt=date(DATE_ATOM);
+        $updated=$this->db->prepare('UPDATE mail_templates SET name=?,subject=?,body_html=?,updated_at=? WHERE owner=? AND id=?');$updated->execute([$name,$subject,$body,$updatedAt,$owner,$id]);if($updated->rowCount()===0){try{$insert=$this->db->prepare('INSERT INTO mail_templates(id,owner,name,subject,body_html,updated_at) VALUES(?,?,?,?,?,?)');$insert->execute([$id,$owner,$name,$subject,$body,$updatedAt]);}catch(\PDOException){$updated->execute([$name,$subject,$body,$updatedAt,$owner,$id]);}}return ['id'=>$id,'name'=>$name,'subject'=>$subject,'body_html'=>$body,'updated_at'=>$updatedAt];
+    }
+
+    public function deleteTemplate(string $owner,string $id): void {$s=$this->db->prepare('DELETE FROM mail_templates WHERE owner=? AND id=?');$s->execute([$owner,$id]);}
 
     private function ensureColumn(string $table,string $definition): void
     {
