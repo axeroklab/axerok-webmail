@@ -88,6 +88,20 @@ final class MailPreferenceRepository
         $column=strtok($definition,' ');$driver=$this->db->getAttribute(\PDO::ATTR_DRIVER_NAME);
         if($driver==='sqlite'){$rows=$this->db->query('PRAGMA table_info('.$table.')')->fetchAll();foreach($rows as $row)if(($row['name']??null)===$column)return;}
         else{$query=$this->db->prepare('SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?');$query->execute([$table,$column]);if($query->fetchColumn())return;}
-        $this->db->exec("ALTER TABLE {$table} ADD COLUMN {$definition}");
+        try {
+            $this->db->exec("ALTER TABLE {$table} ADD COLUMN {$definition}");
+        } catch (\PDOException $error) {
+            // Another request may have added the column after our existence check.
+            // Re-read the schema and only rethrow if the column is still missing.
+            if ($driver === 'sqlite') {
+                $rows = $this->db->query('PRAGMA table_info(' . $table . ')')->fetchAll();
+                foreach ($rows as $row) if (($row['name'] ?? null) === $column) return;
+            } else {
+                $query = $this->db->prepare('SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?');
+                $query->execute([$table, $column]);
+                if ($query->fetchColumn()) return;
+            }
+            throw $error;
+        }
     }
 }
