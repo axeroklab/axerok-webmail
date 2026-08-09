@@ -21,9 +21,22 @@ final class ContactRepository
         $name=trim((string)($contact['name']??''));$phone=trim((string)($contact['phone']??''));$organization=trim((string)($contact['organization']??''));
         if(self::length($name)>255||self::length($phone)>80||self::length($organization)>255)return 'invalid';
         $existing=$this->db->prepare('SELECT id FROM contacts WHERE owner=? AND email=?');$existing->execute([$owner,$email]);$wasExisting=(bool)$existing->fetchColumn();$now=date(DATE_ATOM);$driver=$this->db->getAttribute(\PDO::ATTR_DRIVER_NAME);
-        if($driver==='mysql'){$s=$this->db->prepare('INSERT INTO contacts(owner,email,name,phone,organization,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name),phone=VALUES(phone),organization=VALUES(organization),updated_at=VALUES(updated_at)');}
-        else{$s=$this->db->prepare('INSERT INTO contacts(owner,email,name,phone,organization,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(owner,email) DO UPDATE SET name=excluded.name,phone=excluded.phone,organization=excluded.organization,updated_at=excluded.updated_at');}
-        $s->execute([$owner,$email,$name,$phone,$organization,$now,$now]);return $wasExisting?'updated':'created';
+        $values=[$name,$phone,$organization,$now,$owner,$email];
+        if($wasExisting){
+            $s=$this->db->prepare('UPDATE contacts SET name=?,phone=?,organization=?,updated_at=? WHERE owner=? AND email=?');
+            $s->execute($values);
+            return 'updated';
+        }
+        try {
+            $s=$this->db->prepare('INSERT INTO contacts(owner,email,name,phone,organization,created_at,updated_at) VALUES(?,?,?,?,?,?,?)');
+            $s->execute([$owner,$email,$name,$phone,$organization,$now,$now]);
+            return 'created';
+        } catch(\PDOException) {
+            // A concurrent import may have inserted the same owner/email.
+            $s=$this->db->prepare('UPDATE contacts SET name=?,phone=?,organization=?,updated_at=? WHERE owner=? AND email=?');
+            $s->execute($values);
+            return 'updated';
+        }
     }
 
     public function import(string $owner,array $contacts): array
