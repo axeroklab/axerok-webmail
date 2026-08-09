@@ -95,7 +95,7 @@ $sessionPayload = static function (?string $requested = null): array {
 };
 
 if ($action === 'session') {
-    if($requestedAccount!==''&&!Credentials::has($requestedAccount))json_response(['error'=>'La cuenta solicitada ya no está disponible.'],404);
+    if($requestedAccount!==''&&!Credentials::has($requestedAccount))json_response([...$sessionPayload(null),'account_unavailable'=>true]);
     json_response($sessionPayload($requestedAccount));
 }
 
