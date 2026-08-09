@@ -160,6 +160,8 @@ final class ImapClient
                 'uid' => $uid,
                 'folder' => $folder,
                 'from' => MimeParser::decodeHeader($headers['from'] ?? ''),
+                'to' => MimeParser::decodeHeader($headers['to'] ?? ''),
+                'cc' => MimeParser::decodeHeader($headers['cc'] ?? ''),
                 'subject' => MimeParser::decodeHeader($headers['subject'] ?? '(Sin asunto)'),
                 'date' => $headers['date'] ?? '',
                 'message_id' => $headers['message-id'] ?? '',

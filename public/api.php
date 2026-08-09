@@ -215,6 +215,11 @@ try {
         json_response(['filename'=>'axerok-contactos.vcf','contents'=>VCard::export($contacts)]);
     }
     if ($action === 'contacts') { $contacts=(new ContactRepository((array)config('contacts')))->all($email);if(\AxerokMail\Runtime::isCpanel()){try{$contacts=(new RoundcubeReader($email))->contacts();}catch(Throwable){$contacts=[];}}json_response(['contacts'=>$contacts,'source'=>\AxerokMail\Runtime::isCpanel()?'roundcube':'axerok','read_only'=>\AxerokMail\Runtime::isCpanel()]); }
+    if ($action === 'recent-recipients') {
+        $imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$sent=null;foreach($imap->folders() as $candidate)if($candidate['special']==='sent'){$sent=$candidate['name'];break;}
+        $recent=[];if($sent!==null){foreach($imap->messages($sent,1,100) as $row){foreach([(string)($row['to']??''),(string)($row['cc']??'')] as $header){foreach(preg_split('/,\s*(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/',$header)?:[] as $part){$part=trim($part);$address=preg_match('/<([^<>]+)>/',$part,$match)?strtolower(trim($match[1])):strtolower(trim($part));if(!filter_var($address,FILTER_VALIDATE_EMAIL)||isset($recent[$address])||$address===$email)continue;$name=preg_match('/^([^<]+)</',$part,$nameMatch)?trim(trim($nameMatch[1]),'" '):'';$recent[$address]=['id'=>-count($recent)-1,'email'=>$address,'name'=>$name,'phone'=>'','organization'=>''];if(count($recent)>=50)break 2;}}}}
+        $imap->close();json_response(['contacts'=>array_values($recent)]);
+    }
     json_response(['error'=>'Ruta inexistente.'],404);
 } catch(Throwable $e) {
     $incident=bin2hex(random_bytes(6));error_log('[AxerOK Mail API '.$incident.'] '.str_replace(["\r","\n"],' ',$e->getMessage()));json_response(['error'=>'No se pudo completar la operación.','incident'=>$incident],500);
