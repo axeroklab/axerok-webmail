@@ -9,7 +9,7 @@ Before enabling scheduled send, vacation replies, or server-side filters, the cP
 1. A Dovecot/Exim service account with a restricted scope and a secret stored outside the web root, readable only by the cron user; or
 2. A cPanel-managed secret reference that the worker can resolve at runtime without persisting the mailbox password in MySQL, the queue, logs, or job payloads.
 
-The application key alone is not sufficient. It protects data that is already stored; it does not authorize a worker to authenticate to IMAP or SMTP.
+The application key alone is not sufficient. It protects data that is already stored; it does not authorize a worker to authenticate to IMAP or SMTP. The bundled worker accepts test credentials only through an environment variable named `AXEROK_WORKER_` followed by the uppercase SHA-256 hash of the full mailbox address. The value must be injected by the cPanel process environment and must never be written to the database, queue, payload, or log.
 
 ## Queue invariants
 
@@ -34,4 +34,3 @@ After the authentication contract is configured, the cron entry should invoke a 
 ```
 
 The entry point must use `flock`, refuse web requests, set a finite execution time, and exit non-zero when a job remains failed after its retry budget. No scheduled feature is enabled by this document alone; cPanel/Dovecot/Exim validation is required first.
-

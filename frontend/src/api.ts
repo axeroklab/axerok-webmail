@@ -67,5 +67,6 @@ export const api = {
   deleteIdentity:(id:string,csrf:string)=>request<{ok:boolean;identities:Identity[]}>('identities',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf})}),
   unblockSender:(sender:string,csrf:string)=>request<{ok:boolean;senders:string[]}>('blocked-senders',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({sender,csrf})}),
   send: (body:FormData) => request<{ok:boolean;warning:string}>('send',{}, {method:'POST',body}),
+  scheduleSend: (body:FormData) => request<{ok:boolean;job_id:string;send_at:string}>('schedule-send',{}, {method:'POST',body}),
   logout: (csrf:string) => {const body=new FormData();body.set('csrf',csrf);return request<{ok:boolean}>('logout',{}, {method:'POST',body});},
 };
