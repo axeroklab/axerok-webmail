@@ -161,6 +161,8 @@ $keywordsMethod=$imapReflection->getMethod('keywordsFromFetch');
 $assert($keywordsMethod->invoke(null,'* 1 FETCH (UID 7 FLAGS (\\Seen \\Flagged AxerOK_a1b2 custom))')===['AxerOK_a1b2','custom'],'IMAP keyword extraction');
 $folderValidation=$imapReflection->getMethod('validatedFolderName');
 try{$folderValidation->invoke($imapValidation,"Carpeta\ninyectada");$assert(false,'IMAP folder control characters');}catch(Throwable $e){$assert($e->getPrevious() instanceof MailException||$e instanceof MailException,'IMAP folder control characters');}
+$imapQuote=$imapReflection->getMethod('quote');
+try{$imapQuote->invoke($imapValidation,"INBOX\r\nA0002 NOOP");$assert(false,'IMAP command injection control characters');}catch(Throwable $e){$assert($e->getPrevious() instanceof MailException||$e instanceof MailException,'IMAP command injection control characters');}
 try { $imapValidation->setFlags('INBOX',[1],'invalid',true);$assert(false,'IMAP flag allowlist'); } catch (MailException) { $assert(true,'IMAP flag allowlist'); }
 try { $imapValidation->setFlags('INBOX',range(1,101),'seen',true);$assert(false,'IMAP bulk limit'); } catch (MailException) { $assert(true,'IMAP bulk limit'); }
 

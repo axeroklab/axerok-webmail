@@ -109,6 +109,7 @@ final class ImapClient
     /** @return array{exists:int,unseen:int,uidvalidity:?int} */
     public function select(string $folder): array
     {
+        $folder = $this->validatedFolderName($folder);
         $response = $this->command('SELECT ' . $this->quote($this->encodeMailbox($folder)));
         $status = ['exists' => 0, 'unseen' => 0, 'uidvalidity' => null];
         foreach ($response as $line) {
@@ -186,10 +187,11 @@ final class ImapClient
     public function messagesAcrossFolders(array $folders, int $page, int $pageSize, string $query = '', bool $searchBody = false, array $filters = [], int $perFolderLimit = 100): array
     {
         $candidates = array_values(array_filter($folders, static fn(array $item): bool => !in_array('\\Noselect', $item['flags'] ?? [], true)));
-        if (count($candidates) > 100) throw new MailException('Hay demasiadas carpetas para una búsqueda global.');
+        if (count($candidates) > 50) throw new MailException('Hay demasiadas carpetas para una búsqueda global.');
         $rows = [];
         foreach ($candidates as $item) {
-            $rows = array_merge($rows, $this->messages($item['name'], 1, max(1, min(100, $perFolderLimit)), $query, $searchBody, $filters));
+            $rows = array_merge($rows, $this->messages($item['name'], 1, max(1, min(40, $perFolderLimit)), $query, $searchBody, $filters));
+            if (count($rows) >= 2000) break;
         }
         usort($rows, static fn(array $a, array $b): int => strcmp((string)$b['date'], (string)$a['date']));
         $total = count($rows);
@@ -316,6 +318,7 @@ final class ImapClient
 
     public function move(string $folder, int $uid, string $destination): void
     {
+        $destination = $this->validatedFolderName($destination);
         $this->select($folder);
         $this->command('UID MOVE ' . $uid . ' ' . $this->quote($this->encodeMailbox($destination)));
     }
@@ -323,6 +326,7 @@ final class ImapClient
     /** @param array<int,int> $uids */
     public function moveMany(string $folder,array $uids,string $destination): void
     {
+        $destination = $this->validatedFolderName($destination);
         $uids=array_values(array_unique(array_filter(array_map('intval',$uids),static fn(int $uid):bool=>$uid>0)));
         if($uids===[]||count($uids)>100)throw new MailException('La selección de mensajes no es válida.');
         $this->select($folder);$this->command('UID MOVE '.implode(',',$uids).' '.$this->quote($this->encodeMailbox($destination)));
@@ -349,6 +353,7 @@ final class ImapClient
 
     public function append(string $folder, string $rawMessage): void
     {
+        $folder = $this->validatedFolderName($folder);
         if (!is_resource($this->socket)) { throw new MailException('No hay conexión IMAP.'); }
         $tag='A'.str_pad((string)++$this->tag,4,'0',STR_PAD_LEFT);
         fwrite($this->socket,$tag.' APPEND '.$this->quote($this->encodeMailbox($folder)).' (\\Seen) {'.strlen($rawMessage)."}\r\n");
@@ -416,7 +421,13 @@ final class ImapClient
         $syntax=[];foreach($parts as $index=>$part){if($index>0&&preg_match('/\{'.strlen($part).'\}$/',$parts[$index-1]))continue;$syntax[]=$part;}return implode(' ',$syntax);
     }
 
-    private function quote(string $value): string { return '"' . addcslashes($value, "\\\"") . '"'; }
+    private function quote(string $value): string
+    {
+        if (preg_match('/[\x00-\x1F\x7F]/', $value)) {
+            throw new MailException('El comando IMAP contiene caracteres no válidos.');
+        }
+        return '"' . addcslashes($value, "\\\"") . '"';
+    }
     private function encodeMailbox(string $name): string
     {
         if(function_exists('mb_convert_encoding')){try{$converted=@mb_convert_encoding($name,'UTF7-IMAP','UTF-8');if(is_string($converted))return $converted;}catch(\Throwable){}}

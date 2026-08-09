@@ -9,7 +9,7 @@ final class SmtpClient
     public function __construct(private readonly array $options) {}
 
     /** @param array<int,array{name:string,type:string,data:string}> $attachments */
-    public function send(string $username, string $password, string $to, string $cc, string $bcc, string $subject, string $body, string $html, bool $receiptRequested = false, string $priority = 'normal', array $attachments = [], string $displayName = '', string $replyTo = '', string $organization = ''): string
+    public function send(string $username, string $password, string $to, string $cc, string $bcc, string $subject, string $body, string $html, bool $receiptRequested = false, string $priority = 'normal', array $attachments = [], string $displayName = '', string $replyTo = '', string $organization = '', string $fromEmail = ''): string
     {
         $toRecipients = $this->recipients($to); $ccRecipients = $this->recipients($cc); $bccRecipients = $this->recipients($bcc);
         if ($toRecipients === []) { throw new MailException('Ingresá al menos un destinatario válido.'); }
@@ -29,10 +29,12 @@ final class SmtpClient
             $this->write('EHLO ' . ($_SERVER['SERVER_NAME'] ?? 'localhost')); $this->expect([250]);
         }
         $this->write('AUTH LOGIN'); $this->expect([334]); $this->write(base64_encode($username)); $this->expect([334]); $this->write(base64_encode($password)); $this->expect([235]);
-        $this->write('MAIL FROM:<' . $username . '>'); $this->expect([250]);
+        $fromEmail = $fromEmail !== '' ? $fromEmail : $username;
+        if (!filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) { throw new MailException('La identidad de envío no es válida.'); }
+        $this->write('MAIL FROM:<' . $fromEmail . '>'); $this->expect([250]);
         foreach ($recipients as $recipient) { $this->write('RCPT TO:<' . $recipient . '>'); $this->expect([250, 251]); }
         $this->write('DATA'); $this->expect([354]);
-        $message = $this->buildMessage($username, $toRecipients, $ccRecipients, $subject, $body, $html, $receiptRequested, $priority, $attachments, $displayName, $replyTo, $organization);
+        $message = $this->buildMessage($fromEmail, $toRecipients, $ccRecipients, $subject, $body, $html, $receiptRequested, $priority, $attachments, $displayName, $replyTo, $organization);
         fwrite($this->socket, preg_replace('/(?m)^\./', '..', $message) . "\r\n.\r\n");
         $this->expect([250]); // Desde este punto el servidor ya aceptó el mensaje.
         $this->write('QUIT');

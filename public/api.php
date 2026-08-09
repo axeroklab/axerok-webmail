@@ -71,6 +71,11 @@ function api_send_commit($handle,string $file,array $result): void
     ftruncate($handle,0);rewind($handle);fwrite($handle,json_encode(['sent_at'=>time(),'result'=>$result],JSON_THROW_ON_ERROR));fflush($handle);@chmod($file,0600);flock($handle,LOCK_UN);fclose($handle);
 }
 
+function api_send_checkpoint($handle,string $file,array $result): void
+{
+    ftruncate($handle,0);rewind($handle);fwrite($handle,json_encode(['sent_at'=>time(),'phase'=>'smtp_accepted','result'=>$result],JSON_THROW_ON_ERROR));fflush($handle);@chmod($file,0600);
+}
+
 function api_require_csrf(): void
 {
     if (!hash_equals((string)($_SESSION['csrf'] ?? ''), (string)($_POST['csrf'] ?? ''))) {
@@ -133,7 +138,8 @@ try {
         api_require_csrf();[$sendHandle,$sendFile,$sendState]=api_send_lock($email,(string)($_POST['idempotency_key']??''));if(isset($sendState['result'])&&is_array($sendState['result'])){flock($sendHandle,LOCK_UN);fclose($sendHandle);json_response($sendState['result']);}$to=trim((string)($_POST['to']??''));$cc=trim((string)($_POST['cc']??''));$bcc=trim((string)($_POST['bcc']??''));$subject=trim((string)($_POST['subject']??''))?:'(Sin asunto)';$html=clean_composer_html((string)($_POST['body_html']??''));$body=composer_plain_text($html);$receipt=($_POST['receipt_requested']??'')==='1';$priority=(string)($_POST['priority']??'normal');if(!in_array($priority,['low','normal','high'],true))throw new RuntimeException('La prioridad no es válida.');
         if($body==='')throw new RuntimeException('Escribí el contenido del mensaje.');if(unicode_length($subject)>300)throw new RuntimeException('El asunto supera 300 caracteres.');if(strlen($html)>1048576)throw new RuntimeException('El cuerpo supera 1 MB.');$attachments=api_attachments($_FILES['attachments']??[]);
         $identityRepo=new MailPreferenceRepository((array)config('contacts'));$identity=$identityRepo->preferences($email);$fromEmail=$email;$identityId=trim((string)($_POST['identity_id']??''));if($identityId!==''){foreach((\AxerokMail\Runtime::isCpanel()?(new RoundcubeReader($email))->identities():$identityRepo->identities($email)) as $candidate){if((string)$candidate['id']===$identityId){$fromEmail=(string)$candidate['email'];$identity=$candidate;break;}}if($fromEmail===$email)throw new RuntimeException('La identidad elegida no existe.');$bcc=$bcc!==''?$bcc:(string)$identity['default_bcc'];}
-        $raw=(new SmtpClient((array)config('mail')))->send($fromEmail,$password,$to,$cc,$bcc,$subject,$body,$html,$receipt,$priority,$attachments,(string)$identity['display_name'],(string)$identity['reply_to'],(string)$identity['organization']);$warning='';
+        $raw=(new SmtpClient((array)config('mail')))->send($email,$password,$to,$cc,$bcc,$subject,$body,$html,$receipt,$priority,$attachments,(string)$identity['display_name'],(string)$identity['reply_to'],(string)$identity['organization'],$fromEmail);$warning='';
+        api_send_checkpoint($sendHandle,$sendFile,['ok'=>true,'warning'=>'El servidor SMTP aceptó el mensaje; la copia en Enviados queda pendiente de confirmar.']);
         try{$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$sent=null;foreach($imap->folders() as $candidate){if($candidate['special']==='sent'){$sent=$candidate['name'];break;}}if($sent!==null)$imap->append($sent,$raw);else$warning='No se encontró la carpeta Enviados.';$imap->close();}catch(Throwable){$warning='El correo salió, pero no se pudo copiar a Enviados.';}
         (new MailPreferenceRepository((array)config('contacts')))->deleteDraft($email,(string)($_POST['id']??''));$result=['ok'=>true,'warning'=>$warning];api_send_commit($sendHandle,$sendFile,$result);json_response($result);
     }
