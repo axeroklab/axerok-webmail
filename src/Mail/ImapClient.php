@@ -180,6 +180,21 @@ final class ImapClient
         return $this->lastMailboxTotal;
     }
 
+    /** @param array<int,array{name:string,flags?:array<int,string>}> $folders */
+    public function messagesAcrossFolders(array $folders, int $page, int $pageSize, string $query = '', bool $searchBody = false, array $filters = [], int $perFolderLimit = 100): array
+    {
+        $candidates = array_values(array_filter($folders, static fn(array $item): bool => !in_array('\\Noselect', $item['flags'] ?? [], true)));
+        if (count($candidates) > 100) throw new MailException('Hay demasiadas carpetas para una búsqueda global.');
+        $rows = [];
+        foreach ($candidates as $item) {
+            $rows = array_merge($rows, $this->messages($item['name'], 1, max(1, min(100, $perFolderLimit)), $query, $searchBody, $filters));
+        }
+        usort($rows, static fn(array $a, array $b): int => strcmp((string)$b['date'], (string)$a['date']));
+        $total = count($rows);
+        $this->lastMailboxTotal = $total;
+        return array_slice($rows, max(0, ($page - 1) * $pageSize), $pageSize);
+    }
+
     /** @param array<string,string> $headers */
     public static function threadIdFromHeaders(array $headers): string
     {
