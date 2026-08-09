@@ -47,7 +47,7 @@ export const api = {
   updateLabel:(id:number,name:string,color:string,csrf:string)=>{const body=new FormData();body.set('id',String(id));body.set('name',name);body.set('color',color);body.set('csrf',csrf);return request<{ok:boolean;labels:Label[]}>('label-update',{}, {method:'POST',body});},
   deleteLabel:(id:number,csrf:string)=>{const body=new FormData();body.set('id',String(id));body.set('csrf',csrf);return request<{ok:boolean;labels:Label[]}>('label-delete',{}, {method:'POST',body});},
   applyLabel:(folder:string,uids:number[],id:number,enabled:boolean,csrf:string)=>{const body=new FormData();body.set('folder',folder);body.set('uids',uids.join(','));body.set('id',String(id));body.set('enabled',enabled?'1':'0');body.set('csrf',csrf);return request<{ok:boolean}>('label-apply',{}, {method:'POST',body});},
-  contacts: () => request<{contacts:Contact[]}>('contacts'),
+  contacts: () => request<{contacts:Contact[];read_only?:boolean}>('contacts'),
   importContacts: (file:File,csrf:string) => {const body=new FormData();body.set('vcard',file,file.name);body.set('csrf',csrf);return request<{ok:boolean;stats:{created:number;updated:number;invalid:number}}>('contacts-import',{}, {method:'POST',body});},
   roundcubeStatus:()=>request<{available:boolean;reason?:string;status?:{personal:number;collected:number;carddav:number;identity:boolean}}>('roundcube-status'),
   importRoundcube:(collected:boolean,identity:boolean,csrf:string)=>{const body=new FormData();body.set('collected',collected?'1':'0');body.set('identity',identity?'1':'0');body.set('csrf',csrf);return request<{ok:boolean;stats:{created:number;updated:number;invalid:number};identity_imported:boolean}>('roundcube-import',{}, {method:'POST',body});},

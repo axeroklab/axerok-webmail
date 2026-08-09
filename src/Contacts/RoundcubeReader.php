@@ -41,6 +41,18 @@ final class RoundcubeReader
         return ['contacts'=>$contacts,'identity'=>$profile];
     }
 
+    /** @return list<array{id:int,email:string,name:string,phone:string,organization:string}> */
+    public function contacts(): array
+    {
+        $items=[];
+        foreach ($this->read(true,false)['contacts'] as $item) {
+            $email=strtolower(trim((string)($item['email']??'')));
+            if (!filter_var($email,FILTER_VALIDATE_EMAIL)||isset($items[$email])) continue;
+            $items[$email]=['id'=>count($items)+1,'email'=>$email,'name'=>(string)($item['name']??''),'phone'=>(string)($item['phone']??''),'organization'=>(string)($item['organization']??'')];
+        }
+        return array_values($items);
+    }
+
     private function open(): \SQLite3 { $db=new \SQLite3($this->path,SQLITE3_OPEN_READONLY);$db->exec('PRAGMA query_only=ON');$db->busyTimeout(1500);return $db; }
     private function count(\SQLite3 $db,string $table,string $where='1=1'): int { return (int)$db->querySingle("SELECT COUNT(*) FROM {$table} WHERE {$where}"); }
     private function hasColumn(\SQLite3 $db,string $table,string $column): bool { $result=$db->query("PRAGMA table_info({$table})");while($result&&($row=$result->fetchArray(SQLITE3_ASSOC))){if(($row['name']??null)===$column)return true;}return false; }
