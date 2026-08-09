@@ -15,6 +15,7 @@ require dirname(__DIR__) . '/src/Security/Credentials.php';
 require dirname(__DIR__) . '/src/Contacts/ContactRepository.php';
 require dirname(__DIR__) . '/src/Labels/LabelRepository.php';
 require dirname(__DIR__) . '/src/Preferences/MailPreferenceRepository.php';
+require dirname(__DIR__) . '/src/Worker/JobQueue.php';
 
 use AxerokMail\Contacts\VCard;
 use AxerokMail\Contacts\RoundcubeReader;
@@ -28,6 +29,7 @@ use AxerokMail\Security\Credentials;
 use AxerokMail\Contacts\ContactRepository;
 use AxerokMail\Labels\LabelRepository;
 use AxerokMail\Preferences\MailPreferenceRepository;
+use AxerokMail\Worker\JobQueue;
 
 $tests = 0;
 $assert = static function (bool $condition, string $message) use (&$tests): void {
@@ -105,6 +107,11 @@ if(class_exists(SQLite3::class)){
     $assert($preferenceRepository->blockedSenders('owner@example.com')===['blocked@example.com'],'blocked sender normalization');
     $preferenceRepository->unblockSender('owner@example.com','blocked@example.com');
     $assert($preferenceRepository->blockedSenders('owner@example.com')===[],'unblock sender');
+    $queue=new JobQueue(new PDO($sqliteConfig['dsn']));
+    $jobId=$queue->enqueue('owner@example.com','mail.send','idempotency-001',['message_id'=>'draft-1'],time());
+    $claimed=$queue->claim('worker-test');
+    $assert(($claimed['id']??'')===$jobId&&($claimed['payload']['message_id']??'')==='draft-1','worker job claim');
+    $queue->finish($jobId,true);
     unlink($appDatabase);
 }
 
