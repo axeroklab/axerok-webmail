@@ -62,7 +62,7 @@ export const api = {
   deleteTemplate:(id:string,csrf:string)=>request<{ok:boolean;templates:MailTemplate[]}>('templates',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf})}),
   blockSender:(folder:string,uid:number,csrf:string)=>{const body=new FormData();body.set('folder',folder);body.set('uid',String(uid));body.set('csrf',csrf);return request<{ok:boolean;sender:string}>('block-sender',{}, {method:'POST',body});},
   blockedSenders:()=>request<{senders:string[]}>('blocked-senders'),
-  identities:()=>request<{identities:Identity[]}>('identities'),
+  identities:()=>request<{identities:Identity[];read_only?:boolean}>('identities'),
   saveIdentity:(identity:Identity,csrf:string)=>{const body=new FormData();Object.entries(identity).forEach(([key,value])=>body.set(key,String(value??'')));body.set('csrf',csrf);return request<{ok:boolean;identity:Identity;identities:Identity[]}>('identities',{}, {method:'POST',body});},
   deleteIdentity:(id:string,csrf:string)=>request<{ok:boolean;identities:Identity[]}>('identities',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf})}),
   unblockSender:(sender:string,csrf:string)=>request<{ok:boolean;senders:string[]}>('blocked-senders',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({sender,csrf})}),

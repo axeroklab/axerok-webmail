@@ -53,6 +53,15 @@ final class RoundcubeReader
         return array_values($items);
     }
 
+    /** @return list<array<string,mixed>> */
+    public function identities(): array
+    {
+        $db=$this->open();$items=[];
+        try{$result=$db->query('SELECT identity_id,email,name,organization,"reply-to" AS reply_to,bcc,signature,html_signature FROM identities WHERE del=0 ORDER BY standard DESC,identity_id ASC');while($result&&($row=$result->fetchArray(SQLITE3_ASSOC))){$email=strtolower(trim((string)($row['email']??'')));if(!filter_var($email,FILTER_VALIDATE_EMAIL))continue;$signature=(string)($row['signature']??'');$items[]=['id'=>'roundcube-'.(string)$row['identity_id'],'email'=>$email,'display_name'=>(string)($row['name']??''),'reply_to'=>(string)($row['reply_to']??''),'default_bcc'=>(string)($row['bcc']??''),'signature_html'=>(int)($row['html_signature']??0)===1?$signature:nl2br(htmlspecialchars($signature,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'))];}}
+        finally{$db->close();}
+        return $items;
+    }
+
     private function open(): \SQLite3 { $db=new \SQLite3($this->path,SQLITE3_OPEN_READONLY);$db->exec('PRAGMA query_only=ON');$db->busyTimeout(1500);return $db; }
     private function count(\SQLite3 $db,string $table,string $where='1=1'): int { return (int)$db->querySingle("SELECT COUNT(*) FROM {$table} WHERE {$where}"); }
     private function hasColumn(\SQLite3 $db,string $table,string $column): bool { $result=$db->query("PRAGMA table_info({$table})");while($result&&($row=$result->fetchArray(SQLITE3_ASSOC))){if(($row['name']??null)===$column)return true;}return false; }
