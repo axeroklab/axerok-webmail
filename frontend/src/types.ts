@@ -8,4 +8,5 @@ export type Preferences = { signature_html:string;receipt_default:boolean;displa
 export type Draft = { id:string;to:string;cc:string;bcc:string;subject:string;body_html:string;receipt_requested:boolean;priority:'low'|'normal'|'high';updated_at?:string };
 export type MailTemplate = {id:string;name:string;subject:string;body_html:string;updated_at?:string};
 export type Contact = { id:number;email:string;name:string;phone:string;organization:string };
+export type Identity = { id:string;email:string;display_name:string;reply_to:string;default_bcc:string;signature_html:string;updated_at?:string };
 export type Attachment = {name:string;type:string;size:number;url:string};

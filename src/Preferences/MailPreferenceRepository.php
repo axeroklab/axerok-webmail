@@ -18,6 +18,7 @@ final class MailPreferenceRepository
         $this->db->exec("CREATE TABLE IF NOT EXISTS mail_drafts_v2 (id VARCHAR(64) NOT NULL, owner VARCHAR(255) NOT NULL, recipients_to TEXT NOT NULL, recipients_cc TEXT NOT NULL, recipients_bcc TEXT NOT NULL, subject VARCHAR(300) NOT NULL, body_html TEXT NOT NULL, receipt_requested INTEGER NOT NULL DEFAULT 0, priority VARCHAR(10) NOT NULL DEFAULT 'normal', updated_at VARCHAR(32) NOT NULL, PRIMARY KEY(owner,id))");
         $this->db->exec("CREATE TABLE IF NOT EXISTS mail_templates (id VARCHAR(64) NOT NULL, owner VARCHAR(255) NOT NULL, name VARCHAR(120) NOT NULL, subject VARCHAR(300) NOT NULL, body_html TEXT NOT NULL, updated_at VARCHAR(32) NOT NULL, PRIMARY KEY(owner,id))");
         $this->db->exec("CREATE TABLE IF NOT EXISTS blocked_senders (owner VARCHAR(255) NOT NULL, sender VARCHAR(255) NOT NULL, created_at VARCHAR(32) NOT NULL, PRIMARY KEY(owner,sender))");
+        $this->db->exec("CREATE TABLE IF NOT EXISTS mail_identities (id VARCHAR(64) NOT NULL, owner VARCHAR(255) NOT NULL, email VARCHAR(255) NOT NULL, display_name VARCHAR(160) NOT NULL, reply_to VARCHAR(255) NOT NULL, default_bcc VARCHAR(1000) NOT NULL, signature_html TEXT NOT NULL, created_at VARCHAR(32) NOT NULL, updated_at VARCHAR(32) NOT NULL, PRIMARY KEY(owner,id), UNIQUE(owner,email))");
     }
 
     /** @return array<string,mixed> */
@@ -72,6 +73,15 @@ final class MailPreferenceRepository
     public function blockedSenders(string $owner): array {$s=$this->db->prepare('SELECT sender FROM blocked_senders WHERE owner=? ORDER BY sender');$s->execute([$owner]);return array_map(static fn(array $row):string=>(string)$row['sender'],$s->fetchAll()?:[]);}
     public function blockSender(string $owner,string $sender): void {$sender=strtolower(trim($sender));if(!filter_var($sender,FILTER_VALIDATE_EMAIL))throw new \RuntimeException('El remitente no es válido.');try{$s=$this->db->prepare('INSERT INTO blocked_senders(owner,sender,created_at) VALUES(?,?,?)');$s->execute([$owner,$sender,date(DATE_ATOM)]);}catch(\PDOException){}}
     public function unblockSender(string $owner,string $sender): void {$s=$this->db->prepare('DELETE FROM blocked_senders WHERE owner=? AND sender=?');$s->execute([$owner,strtolower(trim($sender))]);}
+
+    /** @return array<int,array<string,mixed>> */
+    public function identities(string $owner): array {$s=$this->db->prepare('SELECT id,email,display_name,reply_to,default_bcc,signature_html,created_at,updated_at FROM mail_identities WHERE owner=? ORDER BY email');$s->execute([$owner]);return $s->fetchAll()?:[];}
+    /** @return array<string,mixed> */
+    public function saveIdentity(string $owner,array $identity): array
+    {
+        $id=(string)($identity['id']??'');if(!preg_match('/^[a-zA-Z0-9-]{16,64}$/',$id))$id=bin2hex(random_bytes(16));$email=strtolower(trim((string)($identity['email']??'')));if(!filter_var($email,FILTER_VALIDATE_EMAIL))throw new \RuntimeException('La dirección de la identidad no es válida.');$name=trim((string)($identity['display_name']??''));if(strlen($name)>160)throw new \RuntimeException('El nombre de la identidad es demasiado largo.');$reply=trim((string)($identity['reply_to']??''));if($reply!==''&&!filter_var($reply,FILTER_VALIDATE_EMAIL))throw new \RuntimeException('Reply-To no es válido.');$bcc=trim((string)($identity['default_bcc']??''));if(strlen($bcc)>1000)throw new \RuntimeException('El Cco de la identidad es demasiado largo.');$signature=(string)($identity['signature_html']??'');if(strlen($signature)>100000)throw new \RuntimeException('La firma de la identidad supera el límite.');$now=date(DATE_ATOM);$values=[$email,$name,$reply,$bcc,$signature,$now,$now,$owner,$id];$updated=$this->db->prepare('UPDATE mail_identities SET email=?,display_name=?,reply_to=?,default_bcc=?,signature_html=?,updated_at=? WHERE owner=? AND id=?');$updated->execute([$email,$name,$reply,$bcc,$signature,$now,$owner,$id]);if($updated->rowCount()===0){try{$this->db->prepare('INSERT INTO mail_identities(id,owner,email,display_name,reply_to,default_bcc,signature_html,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)')->execute([$id,$owner,$email,$name,$reply,$bcc,$signature,$now,$now]);}catch(\PDOException){throw new \RuntimeException('La identidad ya existe o no pudo guardarse.');}}return ['id'=>$id,'email'=>$email,'display_name'=>$name,'reply_to'=>$reply,'default_bcc'=>$bcc,'signature_html'=>$signature,'updated_at'=>$now];
+    }
+    public function deleteIdentity(string $owner,string $id): void {$s=$this->db->prepare('DELETE FROM mail_identities WHERE owner=? AND id=?');$s->execute([$owner,$id]);}
 
     private function ensureColumn(string $table,string $definition): void
     {
