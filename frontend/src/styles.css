@@ -27,4 +27,6 @@
 .searchAllToggle{border:1px solid #d8dee8;border-radius:10px;background:#fff;color:#687386;padding:9px 10px;cursor:pointer;white-space:nowrap}.searchAllToggle.active{background:#202b49;color:#fff;border-color:#202b49}
 .field:has(.recipientInput){min-height:45px;height:auto;align-items:flex-start;padding-top:3px;padding-bottom:3px;position:relative;z-index:4}
 .recipientInput{padding:0 2px}
-.recipientSuggestions{top:100%;left:0;right:0;min-width:290px;max-width:440px}
+.field:has(.recipientSuggestions){z-index:50}
+.field.compact{position:relative;z-index:1}
+.recipientSuggestions{top:calc(100% + 1px);left:0;right:0;min-width:290px;max-width:440px}
