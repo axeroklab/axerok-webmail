@@ -16,6 +16,7 @@ require dirname(__DIR__) . '/src/Contacts/ContactRepository.php';
 require dirname(__DIR__) . '/src/Labels/LabelRepository.php';
 require dirname(__DIR__) . '/src/Preferences/MailPreferenceRepository.php';
 require dirname(__DIR__) . '/src/Worker/JobQueue.php';
+require dirname(__DIR__) . '/src/Html.php';
 
 use AxerokMail\Contacts\VCard;
 use AxerokMail\Contacts\RoundcubeReader;
@@ -175,5 +176,23 @@ $otherDirectory = sys_get_temp_dir() . '/axerok-rate-' . bin2hex(random_bytes(4)
 $ipLimiter = new LoginRateLimiter($otherDirectory);
 for ($i = 0; $i < 30; $i++) { $ipLimiter->failure('192.0.2.11', 'user' . $i . '@example.com'); }
 try { $ipLimiter->assertAllowed('192.0.2.11', 'new@example.com'); $assert(false, 'IP rate limit across accounts'); } catch (RuntimeException) { $assert(true, 'IP rate limit across accounts'); }
+
+// --- Sanitizadores de HTML (src/Html.php) — defensa anti-XSS ---
+$assert(!str_contains(clean_composer_html('<script>alert(1)</script><p>hola</p>'), 'alert'), 'clean_composer_html elimina <script>');
+$assert(clean_composer_html('<iframe src="//evil"></iframe><b>ok</b>') === '<b>ok</b>', 'clean_composer_html elimina <iframe>');
+$assert(clean_composer_html('<p onclick="x()">hola</p>') === '<p>hola</p>', 'clean_composer_html quita atributos de eventos');
+$assert(clean_composer_html('<img src=x onerror=alert(1)>hola') === 'hola', 'clean_composer_html elimina tags no permitidos');
+$assert(clean_composer_html('<a href="javascript:alert(1)">x</a>') === '<a>x</a>', 'clean_composer_html rechaza href javascript:');
+$linkClean = clean_composer_html('<a href="https://ok.com">x</a>');
+$assert(str_contains($linkClean, 'href="https://ok.com"') && str_contains($linkClean, 'rel="noopener noreferrer"'), 'clean_composer_html conserva href http y agrega rel noopener');
+$assert(composer_plain_text('<p>uno</p><p>dos</p>') === "uno\ndos", 'composer_plain_text convierte parrafos en saltos de linea');
+$assert(composer_plain_text('a<br>b') === "a\nb", 'composer_plain_text convierte <br>');
+$assert(email_has_remote_images('<img src="https://x/a.png">') === true, 'email_has_remote_images detecta imagen remota');
+$assert(email_has_remote_images('<img src="cid:logo">') === false, 'email_has_remote_images ignora imagenes cid/inline');
+$assert(email_has_remote_images('<div style="background:url(https://x/a.png)">') === true, 'email_has_remote_images detecta url() remota');
+$safeDefault = safe_email_html('<script>alert(1)</script><b>hola</b>');
+$assert(str_contains($safeDefault, "default-src 'none'") && str_contains($safeDefault, 'img[src^="http" i]{visibility:hidden}'), 'safe_email_html aplica CSP y bloquea imagenes remotas por defecto');
+$assert(!str_contains(safe_email_html('<base href="//evil/">x'), '<base href'), 'safe_email_html elimina <base> del contenido');
+$assert(str_contains(safe_email_html('x', true), "img-src 'self' data: cid: https:"), 'safe_email_html permite imagenes remotas cuando se habilita');
 
 echo "PASS: {$tests} assertions\n";
