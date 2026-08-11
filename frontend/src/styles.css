@@ -32,4 +32,5 @@
 .recipientSuggestions{top:calc(100% + 1px);left:0;right:0;min-width:290px;max-width:440px}
 .compose{height:60px;font-size:16px;padding:0 27px;border-radius:20px}
 .shell>aside>.compose,.shell.collapsed>aside>.compose{height:60px;min-height:60px;flex:none}
+.brand img{object-fit:contain;width:109px;height:40px;display:block}.brand .brandDark,:root[data-theme=dark] .brand .brandLight{display:none}:root[data-theme=dark] .brand .brandDark{display:block}
 .sidebarLabels{border-top:1px solid var(--line);margin-top:18px;padding:14px 8px 4px;display:grid;gap:3px}.sidebarLabels>b{font-size:12px;color:var(--muted);padding:0 8px 7px}.sidebarLabels button{border:0;background:transparent;display:flex;align-items:center;gap:9px;border-radius:8px;padding:7px 8px;text-align:left;color:var(--muted)}.sidebarLabels button:hover{background:#eceef2;color:#202635}.sidebarLabels i{width:10px;height:10px;border-radius:50%;flex:none}.sidebarLabels span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
