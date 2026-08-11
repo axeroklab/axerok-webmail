@@ -188,13 +188,11 @@ final class ImapClient
     {
         $candidates = array_values(array_filter($folders, static fn(array $item): bool => !in_array('\\Noselect', $item['flags'] ?? [], true)));
         if (count($candidates) > 50) throw new MailException('Hay demasiadas carpetas para una búsqueda global.');
-        $rows = [];
+        $rows = [];$total=0;$needed=max($perFolderLimit,$page*$pageSize);if($needed>1000)throw new MailException('La página solicitada supera el límite de búsqueda global.');
         foreach ($candidates as $item) {
-            $rows = array_merge($rows, $this->messages($item['name'], 1, max(1, min(40, $perFolderLimit)), $query, $searchBody, $filters));
-            if (count($rows) >= 2000) break;
+            $rows = array_merge($rows, $this->messages($item['name'], 1, $needed, $query, $searchBody, $filters));$total+=$this->lastMailboxTotal();
         }
-        usort($rows, static fn(array $a, array $b): int => strcmp((string)$b['date'], (string)$a['date']));
-        $total = count($rows);
+        usort($rows, static function(array $a,array $b): int {$left=strtotime((string)$a['date']);$right=strtotime((string)$b['date']);return ($right?:0)<=>($left?:0);});
         $this->lastMailboxTotal = $total;
         return array_slice($rows, max(0, ($page - 1) * $pageSize), $pageSize);
     }

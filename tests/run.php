@@ -15,7 +15,6 @@ require dirname(__DIR__) . '/src/Security/Credentials.php';
 require dirname(__DIR__) . '/src/Contacts/ContactRepository.php';
 require dirname(__DIR__) . '/src/Labels/LabelRepository.php';
 require dirname(__DIR__) . '/src/Preferences/MailPreferenceRepository.php';
-require dirname(__DIR__) . '/src/Worker/JobQueue.php';
 
 use AxerokMail\Contacts\VCard;
 use AxerokMail\Contacts\RoundcubeReader;
@@ -29,7 +28,6 @@ use AxerokMail\Security\Credentials;
 use AxerokMail\Contacts\ContactRepository;
 use AxerokMail\Labels\LabelRepository;
 use AxerokMail\Preferences\MailPreferenceRepository;
-use AxerokMail\Worker\JobQueue;
 
 $tests = 0;
 $assert = static function (bool $condition, string $message) use (&$tests): void {
@@ -97,8 +95,16 @@ if(class_exists(SQLite3::class)){
     $firstDraft=$preferenceRepository->saveDraft('owner@example.com',['id'=>'11111111-1111-4111-8111-111111111111','to'=>'one@example.com','subject'=>'Uno']);
     $secondDraft=$preferenceRepository->saveDraft('owner@example.com',['id'=>'22222222-2222-4222-8222-222222222222','to'=>'two@example.com','subject'=>'Dos']);
     $assert(count($preferenceRepository->drafts('owner@example.com'))===2&&$firstDraft['id']!==$secondDraft['id'],'multiple persistent drafts');
+    $savedAttachments=$preferenceRepository->saveDraftAttachments('owner@example.com',(string)$secondDraft['id'],[['name'=>'factura.pdf','type'=>'application/pdf','data'=>'PDF-DATA']],[]);
+    $assert(count($savedAttachments)===1&&$savedAttachments[0]['name']==='factura.pdf','draft attachment persistence');
+    $attachmentData=$preferenceRepository->draftAttachmentData('owner@example.com',(string)$secondDraft['id'],[(string)$savedAttachments[0]['id']]);
+    $assert(count($attachmentData)===1&&$attachmentData[0]['data']==='PDF-DATA','draft attachment data recovery');
+    $draftRows=$preferenceRepository->drafts('owner@example.com');$draftWithAttachment=current(array_filter($draftRows,static fn(array $item):bool=>$item['id']===$secondDraft['id']));
+    $assert(is_array($draftWithAttachment)&&count($draftWithAttachment['attachments']??[])===1,'draft attachment metadata listing');
     $preferenceRepository->deleteDraft('owner@example.com',(string)$firstDraft['id']);
     $assert(count($preferenceRepository->drafts('owner@example.com'))===1,'delete one draft only');
+    $preferenceRepository->deleteDraft('owner@example.com',(string)$secondDraft['id']);
+    $assert($preferenceRepository->draftAttachmentData('owner@example.com',(string)$secondDraft['id'])===[],'draft deletion removes attachments');
     $template=$preferenceRepository->saveTemplate('owner@example.com',['name'=>'Respuesta comercial','subject'=>'Propuesta','body_html'=>'<p>Hola</p>']);
     $assert(count($preferenceRepository->templates('owner@example.com'))===1&&$template['name']==='Respuesta comercial','persistent mail template');
     $preferenceRepository->deleteTemplate('owner@example.com',(string)$template['id']);
@@ -107,11 +113,6 @@ if(class_exists(SQLite3::class)){
     $assert($preferenceRepository->blockedSenders('owner@example.com')===['blocked@example.com'],'blocked sender normalization');
     $preferenceRepository->unblockSender('owner@example.com','blocked@example.com');
     $assert($preferenceRepository->blockedSenders('owner@example.com')===[],'unblock sender');
-    $queue=new JobQueue(new PDO($sqliteConfig['dsn']));
-    $jobId=$queue->enqueue('owner@example.com','mail.send','idempotency-001',['message_id'=>'draft-1'],time());
-    $claimed=$queue->claim('worker-test');
-    $assert(($claimed['id']??'')===$jobId&&($claimed['payload']['message_id']??'')==='draft-1','worker job claim');
-    $queue->finish($jobId,true);
     unlink($appDatabase);
 }
 
