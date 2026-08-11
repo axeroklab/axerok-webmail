@@ -57,7 +57,7 @@ export const api = {
   savePreferences: (preferences:Preferences,csrf:string) => { const body=new FormData();Object.entries(preferences).forEach(([key,value])=>body.set(key,value===true?'1':value===false?'0':String(value)));body.set('csrf',csrf);return request<{ok:boolean}>('preferences',{}, {method:'POST',body}); },
   drafts: () => request<{drafts:Draft[]}>('draft'),
   saveDraft: (draft:Draft,csrf:string) => {const body=new FormData();Object.entries(draft).forEach(([key,value])=>body.set(key,value===true?'1':value===false?'0':String(value)));body.set('csrf',csrf);return request<{ok:boolean;draft:Draft}>('draft',{}, {method:'POST',body});},
-  deleteDraft: (id:string,csrf:string) => request<{ok:boolean}>('draft',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf})}),
+  deleteDraft: (id:string,csrf:string) => {const body=new FormData();body.set('_operation','delete');body.set('id',id);body.set('csrf',csrf);return request<{ok:boolean}>('draft',{}, {method:'POST',body});},
   templates:()=>request<{templates:MailTemplate[]}>('templates'),
   saveTemplate:(template:Pick<MailTemplate,'name'|'subject'|'body_html'>,csrf:string)=>{const body=new FormData();Object.entries(template).forEach(([key,value])=>body.set(key,value));body.set('csrf',csrf);return request<{ok:boolean;template:MailTemplate;templates:MailTemplate[]}>('templates',{}, {method:'POST',body});},
   deleteTemplate:(id:string,csrf:string)=>request<{ok:boolean;templates:MailTemplate[]}>('templates',{}, {method:'DELETE',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf})}),
