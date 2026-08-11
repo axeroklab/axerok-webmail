@@ -127,10 +127,22 @@ function e(?string $value): string
 function safe_email_html(string $html, bool $allowRemoteImages = false): string
 {
     $html = preg_replace('/<base\b[^>]*>/i', '', $html) ?? '';
+    $html = preg_replace_callback('/<a\b([^>]*)>/i', static function (array $match): string {
+        $attributes = $match[1];
+        if (!preg_match('/\bhref\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $href)) {
+            return $match[0];
+        }
+        $url = trim(html_entity_decode($href[2] !== '' ? $href[2] : ($href[3] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        if (!preg_match('/^(?:https?:\/\/|mailto:|tel:)/i', $url)) {
+            return $match[0];
+        }
+        $attributes = preg_replace('/\s+(?:target|rel)\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $attributes) ?? $attributes;
+        return '<a' . $attributes . ' target="_blank" rel="noopener noreferrer">';
+    }, $html) ?? '';
     $imageSources = $allowRemoteImages ? "'self' data: cid: https:" : "'self' data: cid:";
     $policy = "default-src 'none'; img-src {$imageSources}; style-src 'unsafe-inline'; font-src data:; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
     $blockedImageStyle = $allowRemoteImages ? '' : 'img[src^="http" i]{visibility:hidden}';
-    return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' . $policy . '"><base target="_blank"><style>html{color:#202635;background:#fff;font:16px/1.6 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}' . $blockedImageStyle . '</style></head><body>' . $html . '</body></html>';
+    return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' . $policy . '"><style>html{color:#202635;background:#fff;font:16px/1.6 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}' . $blockedImageStyle . '</style></head><body>' . $html . '</body></html>';
 }
 
 function email_has_remote_images(string $html): bool
