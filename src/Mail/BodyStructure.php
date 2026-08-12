@@ -90,13 +90,14 @@ final class BodyStructure
     /** @return array<string,mixed>|null */
     private static function chooseBody(array $part): ?array
     {
-        if(in_array($part['type'],['text/html','text/plain'],true)&&$part['disposition']['type']!=='attachment')return $part;
-        $children=$part['children'];if($children===[])return null;
-        if($part['type']==='multipart/alternative'){
-            foreach(array_reverse($children) as $child)if($child['type']==='text/html'&&($body=self::chooseBody($child)))return $body;
-            foreach($children as $child)if($child['type']==='text/plain'&&($body=self::chooseBody($child)))return $body;
-        }
-        foreach($children as $child)if($body=self::chooseBody($child))return $body;
+        return self::findBody($part,'text/html')??self::findBody($part,'text/plain');
+    }
+
+    /** @return array<string,mixed>|null */
+    private static function findBody(array $part,string $type): ?array
+    {
+        if($part['type']===$type&&$part['disposition']['type']!=='attachment')return $part;
+        foreach($part['children'] as $child)if($body=self::findBody($child,$type))return $body;
         return null;
     }
 

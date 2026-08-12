@@ -48,9 +48,17 @@ $assert(MimeParser::decodeParameter("UTF-8''factura%20a%C3%B1o.pdf")==='factura 
 
 $structure=BodyStructure::parseFetchResponse('* 1 FETCH (UID 9 BODYSTRUCTURE (("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "QUOTED-PRINTABLE" 120 4 NIL NIL NIL)("TEXT" "HTML" ("CHARSET" "UTF-8") NIL NIL "QUOTED-PRINTABLE" 240 8 NIL NIL NIL)("IMAGE" "PNG" ("NAME" "logo.png") "logo-1" NIL "BASE64" 900 NIL ("INLINE" ("FILENAME" "logo.png")) NIL NIL)("APPLICATION" "PDF" ("NAME" "informe.pdf") NIL NIL "BASE64" 5000 NIL ("ATTACHMENT" ("FILENAME" "informe.pdf")) NIL NIL) "MIXED" ("BOUNDARY" "x") NIL NIL NIL))');
 $description=BodyStructure::describe($structure);
-$assert($description['body']['section']==='1','BODYSTRUCTURE preferred plain body in mixed');
+$assert($description['body']['section']==='2','BODYSTRUCTURE prefers HTML body across mixed wrappers');
 $assert($description['inline'][0]['section']==='3','BODYSTRUCTURE inline CID section');
 $assert($description['attachments'][0]['section']==='4','BODYSTRUCTURE attachment section');
+
+$nestedStructure=BodyStructure::parseFetchResponse('* 1 FETCH (UID 10 BODYSTRUCTURE ((("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "QUOTED-PRINTABLE" 120 4 NIL NIL NIL)("TEXT" "HTML" ("CHARSET" "UTF-8") NIL NIL "QUOTED-PRINTABLE" 500 12 NIL NIL NIL) "ALTERNATIVE" ("BOUNDARY" "alt") NIL NIL NIL)("IMAGE" "JPEG" ("NAME" "hero.jpg") "hero" NIL "BASE64" 9000 NIL ("INLINE" ("FILENAME" "hero.jpg")) NIL NIL) "RELATED" ("BOUNDARY" "related") NIL NIL NIL))');
+$nestedDescription=BodyStructure::describe($nestedStructure);
+$assert($nestedDescription['body']['type']==='text/html'&&$nestedDescription['body']['section']==='1.2','BODYSTRUCTURE prefers nested HTML inside related wrapper');
+
+$attachedHtmlStructure=BodyStructure::parseFetchResponse('* 1 FETCH (UID 11 BODYSTRUCTURE (("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" 80 2 NIL NIL NIL)("TEXT" "HTML" ("NAME" "attached.html") NIL NIL "BASE64" 400 8 NIL ("ATTACHMENT" ("FILENAME" "attached.html")) NIL NIL) "MIXED" ("BOUNDARY" "mixed") NIL NIL NIL))');
+$attachedHtmlDescription=BodyStructure::describe($attachedHtmlStructure);
+$assert($attachedHtmlDescription['body']['type']==='text/plain','BODYSTRUCTURE never promotes attached HTML to message body');
 
 $tooMany = "From: a@example.com\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n" . str_repeat("--x\r\nContent-Type: text/plain\r\n\r\nx\r\n", 201) . '--x--';
 try { MimeParser::message($tooMany); $assert(false, 'MIME part limit'); } catch (MailException) { $assert(true, 'MIME part limit'); }
