@@ -19,7 +19,7 @@ El archivo `.tar.gz` se descomprime directamente con `install.sh`, `uninstall.sh
 `app/` en el directorio actual; no crea una carpeta envolvente adicional.
 
 ```bash
-tar -xzf axerok-mail-0.4.0-preview14-webmail-cpanel.tar.gz
+tar -xzf axerok-mail-0.4.0-preview16-webmail-cpanel.tar.gz
 bash install.sh
 ```
 

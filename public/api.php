@@ -7,6 +7,7 @@ use AxerokMail\Contacts\ContactRepository;
 use AxerokMail\Contacts\VCard;
 use AxerokMail\Contacts\RoundcubeReader;
 use AxerokMail\Mail\ImapClient;
+use AxerokMail\Mail\AuthenticationException;
 use AxerokMail\Mail\MailException;
 use AxerokMail\Mail\SmtpClient;
 use AxerokMail\Labels\LabelRepository;
@@ -96,7 +97,7 @@ $action = (string)($_GET['action'] ?? 'session');
 $requestedAccount = strtolower(trim((string)($_SERVER['HTTP_X_AXEROK_ACCOUNT'] ?? $_GET['account'] ?? '')));
 $sessionPayload = static function (?string $requested = null): array {
     $email=Credentials::email($requested);
-    return ['authenticated'=>$email!==null,'email'=>$email,'accounts'=>Credentials::accounts(),'csrf'=>(string)$_SESSION['csrf'],'version'=>(string)config('app.version','0.4.0-preview14'),'page_size'=>max(10,min(100,(int)config('mail.page_size',40))),'webmail_home_url'=>\AxerokMail\Runtime::webmailHomeUrl()];
+    return ['authenticated'=>$email!==null,'email'=>$email,'accounts'=>Credentials::accounts(),'csrf'=>(string)$_SESSION['csrf'],'version'=>(string)config('app.version','0.4.0-preview16'),'page_size'=>max(10,min(100,(int)config('mail.page_size',40))),'webmail_home_url'=>\AxerokMail\Runtime::webmailHomeUrl()];
 };
 
 if ($action === 'session') {
@@ -128,6 +129,9 @@ if(!$email||!$password){json_response(['error'=>'La sesión expiró.'],401);}
 session_write_close();
 
 try {
+    if ($action === 'mail-ping') {
+        $started=hrtime(true);$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$imap->ping();$imap->close();api_timing('imap',$started);json_response(['ok'=>true,'checked_at'=>time()]);
+    }
     if ($action==='attachment'||$action==='inline') {
         $folder=(string)($_GET['folder']??'INBOX');$uid=(int)($_GET['uid']??0);$section=(string)($_GET['section']??'');$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$file=$imap->attachment($folder,$uid,$section);$imap->close();$safe=preg_replace('/[^\pL\pN._ -]/u','_',(string)$file['name'])?:'archivo';header('Content-Type: '.((string)$file['type']?:'application/octet-stream'));header('Content-Length: '.strlen((string)$file['data']));header('Cache-Control: private, max-age=300');header('Content-Disposition: '.($action==='inline'?'inline':'attachment')."; filename*=UTF-8''".rawurlencode($safe));header('X-Content-Type-Options: nosniff');echo $file['data'];exit;
     }
@@ -227,6 +231,14 @@ try {
         $imap->close();json_response(['contacts'=>array_values($recent)]);
     }
     json_response(['error'=>'Ruta inexistente.'],404);
+} catch(AuthenticationException $e) {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+    Credentials::remove($email);
+    session_write_close();
+    $incident=bin2hex(random_bytes(6));error_log('[AxerOK Mail API '.$incident.'] Authentication rejected for '.hash('sha256',$email));
+    json_response(['error'=>'La conexión con el servidor de correo expiró. Ingresá nuevamente.','code'=>'reauth_required','incident'=>$incident],401);
 } catch(Throwable $e) {
     $incident=bin2hex(random_bytes(6));error_log('[AxerOK Mail API '.$incident.'] '.str_replace(["\r","\n"],' ',$e->getMessage()));json_response(['error'=>'No se pudo completar la operación.','incident'=>$incident],500);
 }

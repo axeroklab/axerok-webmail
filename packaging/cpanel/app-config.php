@@ -4,14 +4,14 @@ declare(strict_types=1);
 return [
     'app' => [
         'name' => 'AxerOK Mail',
-        'version' => '0.4.0-preview14',
+        'version' => '0.4.0-preview16',
         'mode' => 'cpanel',
         'base_url' => '',
         // In cPanel mode every system account creates its own private key in HOME.
         'key' => '0000000000000000000000000000000000000000000000000000000000000000',
         'session_name' => 'axerok_mail_cpanel',
         'session_lifetime' => 28800,
-        'session_idle_timeout' => 1800,
+        'session_idle_timeout' => 0,
     ],
     'mail' => [
         'imap_host' => '__CPANEL_HOSTNAME__',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 $vendor=dirname(__DIR__).'/vendor/autoload.php';
 if(is_file($vendor))require $vendor;
 require dirname(__DIR__) . '/src/Mail/MailException.php';
+require dirname(__DIR__) . '/src/Mail/AuthenticationException.php';
 require dirname(__DIR__) . '/src/Mail/MimeParser.php';
 require dirname(__DIR__) . '/src/Mail/BodyStructure.php';
 require dirname(__DIR__) . '/src/Mail/ImapClient.php';
@@ -19,6 +20,7 @@ require dirname(__DIR__) . '/src/Preferences/MailPreferenceRepository.php';
 use AxerokMail\Contacts\VCard;
 use AxerokMail\Contacts\RoundcubeReader;
 use AxerokMail\Mail\MailException;
+use AxerokMail\Mail\AuthenticationException;
 use AxerokMail\Mail\MimeParser;
 use AxerokMail\Mail\BodyStructure;
 use AxerokMail\Mail\ImapClient;
@@ -34,6 +36,8 @@ $assert = static function (bool $condition, string $message) use (&$tests): void
     $tests++;
     if (!$condition) { throw new RuntimeException('FAIL: ' . $message); }
 };
+
+$assert(is_subclass_of(AuthenticationException::class, MailException::class), 'IMAP authentication errors are classified');
 
 $plain = MimeParser::message("From: Alice <alice@example.com>\r\nTo: Bob <bob@example.com>\r\nSubject: Hola\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nMensaje seguro");
 $assert($plain['text'] === 'Mensaje seguro', 'plain text MIME');

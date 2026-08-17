@@ -41,7 +41,20 @@ final class ImapClient
                 throw new MailException('No se pudo activar TLS para IMAP.');
             }
         }
-        $this->command('LOGIN ' . $this->quote($username) . ' ' . $this->quote($password));
+        try {
+            $this->command('LOGIN ' . $this->quote($username) . ' ' . $this->quote($password));
+        } catch (MailException $exception) {
+            if (is_resource($this->socket)) {
+                fclose($this->socket);
+            }
+            $this->socket = null;
+            throw new AuthenticationException('El servidor de correo rechazó la autenticación.', 0, $exception);
+        }
+    }
+
+    public function ping(): void
+    {
+        $this->command('NOOP');
     }
 
     public function close(): void

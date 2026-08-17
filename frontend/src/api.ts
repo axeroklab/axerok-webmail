@@ -10,12 +10,13 @@ async function request<T>(action: string, params: Record<string, string> = {}, i
   const response = await fetch(url, { credentials: 'same-origin', ...init,headers });
   const text = await response.text();
   let data: Record<string, unknown>;
-  try { data = JSON.parse(text) as Record<string, unknown>; }
-  catch { data = { error: response.ok ? 'El servidor devolvió una respuesta inválida.' : 'La sesión expiró o el servidor rechazó la operación.' }; }
+  let validJson=true;
+  try { const parsed=JSON.parse(text) as unknown;if(parsed===null||typeof parsed!=='object'||Array.isArray(parsed))throw new Error('invalid JSON object');data=parsed as Record<string,unknown>; }
+  catch { validJson=false;data = { error: response.ok ? 'La sesión expiró o el servidor devolvió una respuesta inválida.' : 'La sesión expiró o el servidor rechazó la operación.' }; }
+  const authenticationResponse=response.redirected||response.status===401||response.status===403||response.status===419||response.status===440||!validJson;
+  if(action!=='login'&&action!=='session'&&authenticationResponse)window.dispatchEvent(new Event('axerok:session-expired'));
+  if(!validJson)throw new Error(String(data.error));
   if (!response.ok) {
-    if (action !== 'login' && (response.status === 401 || response.status === 419)) {
-      window.dispatchEvent(new Event('axerok:session-expired'));
-    }
     throw new Error(typeof data.error === 'string' ? data.error : 'No se pudo completar la operación.');
   }
   return data as T;
@@ -23,6 +24,7 @@ async function request<T>(action: string, params: Record<string, string> = {}, i
 
 export const api = {
   session: () => request<Session>('session'),
+  ping: () => request<{ ok: boolean; checked_at: number }>('mail-ping'),
   login: (email: string, password: string, csrf: string) => {
     const body = new FormData(); body.set('email', email); body.set('password', password); body.set('csrf', csrf);
     return request<Session>('login', {}, { method: 'POST', body });

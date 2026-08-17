@@ -56,7 +56,8 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-sr
 
 ini_set('session.use_strict_mode', '1');
 $sessionLifetime=max(1800,(int)($config['app']['session_lifetime']??28800));
-$sessionIdle=max(900,(int)($config['app']['session_idle_timeout']??1800));
+$configuredSessionIdle=(int)($config['app']['session_idle_timeout']??0);
+$sessionIdle=$configuredSessionIdle<=0?0:max(900,$configuredSessionIdle);
 ini_set('session.gc_maxlifetime',(string)$sessionLifetime);
 $runtimeClass='AxerokMail\\Runtime';
 $sessionDirectory=$runtimeClass::storage('sessions');
@@ -82,7 +83,7 @@ if($runtimeClass::isCpanel()){
 }
 
 $now = time();
-if(isset($_SESSION['last_activity'])&&$now-(int)$_SESSION['last_activity']>$sessionIdle){
+if($sessionIdle>0&&isset($_SESSION['last_activity'])&&$now-(int)$_SESSION['last_activity']>$sessionIdle){
     $_SESSION=[];session_regenerate_id(true);
 }
 if (!isset($_SESSION['rotated_at']) || $now - (int)$_SESSION['rotated_at'] > 86400) {

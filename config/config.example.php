@@ -4,7 +4,7 @@ declare(strict_types=1);
 return [
     'app' => [
         'name' => 'AxerOK Mail',
-        'version' => '0.4.0-preview14',
+        'version' => '0.4.0-preview16',
         // standalone: subdomain normal. cpanel: integrated Webmail application.
         'mode' => 'standalone',
         'base_url' => 'https://mail.example.com',
@@ -12,7 +12,8 @@ return [
         'key' => 'CHANGE_THIS_TO_64_RANDOM_HEX_CHARACTERS',
         'session_name' => 'axerok_mail',
         'session_lifetime' => 28800,
-        'session_idle_timeout' => 1800,
+        // 0 disables application-level idle logout. cPanel SSO binding still applies.
+        'session_idle_timeout' => 0,
     ],
     'mail' => [
         // Use the cPanel server hostname. One installation can serve every
