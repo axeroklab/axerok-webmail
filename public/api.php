@@ -97,7 +97,7 @@ $action = (string)($_GET['action'] ?? 'session');
 $requestedAccount = strtolower(trim((string)($_SERVER['HTTP_X_AXEROK_ACCOUNT'] ?? $_GET['account'] ?? '')));
 $sessionPayload = static function (?string $requested = null): array {
     $email=Credentials::email($requested);
-    return ['authenticated'=>$email!==null,'email'=>$email,'accounts'=>Credentials::accounts(),'csrf'=>(string)$_SESSION['csrf'],'version'=>(string)config('app.version','0.4.0-preview17'),'page_size'=>max(10,min(100,(int)config('mail.page_size',40))),'webmail_home_url'=>\AxerokMail\Runtime::webmailHomeUrl()];
+    return ['authenticated'=>$email!==null,'email'=>$email,'accounts'=>Credentials::accounts(),'csrf'=>(string)$_SESSION['csrf'],'version'=>(string)config('app.version','0.4.0-preview19'),'page_size'=>max(10,min(100,(int)config('mail.page_size',40))),'webmail_home_url'=>\AxerokMail\Runtime::webmailHomeUrl()];
 };
 
 if ($action === 'session') {
@@ -137,6 +137,13 @@ try {
     }
     if ($action==='message-body'&&($_GET['remote']??'')==='1') {
         $folder=(string)($_GET['folder']??'INBOX');$uid=(int)($_GET['uid']??0);$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$message=$imap->message($folder,$uid,false);$imap->close();$resolved=resolve_email_cids((string)$message['html'],(array)($message['inline']??[]),$folder,$uid,$email);header('Content-Type: text/html; charset=utf-8');header("Content-Security-Policy: default-src 'none'; img-src 'self' data: https:; style-src 'unsafe-inline'; font-src data: https:; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",true);echo safe_email_html($resolved,true);exit;
+    }
+    if(in_array($action,['message-headers','message-source','message-download'],true)){
+        $folder=(string)($_GET['folder']??'INBOX');$uid=(int)($_GET['uid']??0);$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$contents=$action==='message-headers'?$imap->messageHeaders($folder,$uid):$imap->rawMessage($folder,$uid);$imap->close();
+        header('Cache-Control: no-store, private');header('X-Content-Type-Options: nosniff');header('Content-Length: '.strlen($contents));
+        if($action==='message-download'){header('Content-Type: message/rfc822');header("Content-Disposition: attachment; filename*=UTF-8''mensaje-{$uid}.eml");}
+        else{header('Content-Type: text/plain; charset=utf-8');header("Content-Security-Policy: default-src 'none'; frame-ancestors 'self'; sandbox",true);header('Content-Disposition: inline');}
+        echo $contents;exit;
     }
     if ($action === 'send' && $_SERVER['REQUEST_METHOD']==='POST') {
         api_require_csrf();[$sendHandle,$sendFile,$sendState]=api_send_lock($email,(string)($_POST['idempotency_key']??''));if(isset($sendState['result'])&&is_array($sendState['result'])){flock($sendHandle,LOCK_UN);fclose($sendHandle);json_response($sendState['result']);}$to=trim((string)($_POST['to']??''));$cc=trim((string)($_POST['cc']??''));$bcc=trim((string)($_POST['bcc']??''));$subject=trim((string)($_POST['subject']??''))?:'(Sin asunto)';$html=clean_composer_html((string)($_POST['body_html']??''));$body=composer_plain_text($html);$receipt=($_POST['receipt_requested']??'')==='1';$priority=(string)($_POST['priority']??'normal');if(!in_array($priority,['low','normal','high'],true))throw new RuntimeException('La prioridad no es válida.');
@@ -202,6 +209,9 @@ try {
     }
     if ($action === 'move-messages' && $_SERVER['REQUEST_METHOD']==='POST') {
         api_require_csrf();$folder=(string)($_POST['folder']??'INBOX');$destination=(string)($_POST['destination']??'');$uids=array_values(array_filter(array_map('intval',explode(',',(string)($_POST['uids']??'')))));$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$valid=false;foreach($imap->folders() as $candidate){if($candidate['name']===$destination&&!in_array('\\Noselect',$candidate['flags']??[],true)){$valid=true;break;}}if(!$valid)throw new RuntimeException('La carpeta de destino no existe.');$imap->moveMany($folder,$uids,$destination);$imap->close();json_response(['ok'=>true]);
+    }
+    if ($action === 'copy-messages' && $_SERVER['REQUEST_METHOD']==='POST') {
+        api_require_csrf();$folder=(string)($_POST['folder']??'INBOX');$destination=(string)($_POST['destination']??'');$uids=array_values(array_filter(array_map('intval',explode(',',(string)($_POST['uids']??'')))));$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$valid=false;foreach($imap->folders() as $candidate){if($candidate['name']===$destination&&!in_array('\\Noselect',$candidate['flags']??[],true)){$valid=true;break;}}if(!$valid)throw new RuntimeException('La carpeta de destino no existe.');$imap->copyMany($folder,$uids,$destination);$imap->close();json_response(['ok'=>true]);
     }
     if ($action === 'delete-messages' && $_SERVER['REQUEST_METHOD']==='POST') {
         api_require_csrf();$folder=(string)($_POST['folder']??'INBOX');$uids=array_values(array_filter(array_map('intval',explode(',',(string)($_POST['uids']??'')))));$imap=new ImapClient((array)config('mail'));$imap->connect($email,$password);$trash=null;foreach($imap->folders() as $candidate){if($candidate['special']==='trash'){$trash=$candidate['name'];break;}}if($trash===null)throw new RuntimeException('No se encontró la carpeta Papelera.');if($folder===$trash)$imap->deleteMany($folder,$uids);else$imap->moveMany($folder,$uids,$trash);$imap->close();json_response(['ok'=>true,'permanent'=>$folder===$trash]);

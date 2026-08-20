@@ -4,7 +4,7 @@ declare(strict_types=1);
 return [
     'app' => [
         'name' => 'AxerOK Mail',
-        'version' => '0.4.0-preview17',
+        'version' => '0.4.0-preview19',
         // standalone: subdomain normal. cpanel: integrated Webmail application.
         'mode' => 'standalone',
         'base_url' => 'https://mail.example.com',

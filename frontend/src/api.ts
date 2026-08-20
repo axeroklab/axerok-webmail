@@ -2,6 +2,10 @@ import type { Attachment, Contact, Draft, Folder, Identity, Label, MailRow, Mail
 
 const endpoint = new URL('api.php', window.location.href).pathname;
 
+function documentUrl(action:string,folder:string,uid:number):string {
+  const url=new URL(endpoint,window.location.origin);url.searchParams.set('action',action);url.searchParams.set('folder',folder);url.searchParams.set('uid',String(uid));const account=sessionStorage.getItem('axerok-account');if(account)url.searchParams.set('account',account);return url.toString();
+}
+
 async function request<T>(action: string, params: Record<string, string> = {}, init?: RequestInit): Promise<T> {
   const url = new URL(endpoint, window.location.origin);
   url.searchParams.set('action', action);
@@ -34,11 +38,13 @@ export const api = {
   folders: () => request<{ folders: Folder[] }>('folders'),
   messages: (folder: string, query = '', searchBody=false, fresh=false, filters?:SearchFilters,page=1) => {const size=Number(filters?.size_value||0);const multiplier=filters?.size_unit==='MB'?1048576:1024;return request<{ messages: MailRow[];total:number }>('messages', { folder, page:String(page),q: query, ...(searchBody?{body:'1'}:{}), ...(fresh?{fresh:'1'}:{}),...(filters?{from:filters.from,to:filters.to,subject:filters.subject,contains:filters.contains,exclude:filters.exclude,status:filters.status,size_op:filters.size_op,size_bytes:String(Number.isFinite(size)?Math.round(size*multiplier):0),since:filters.since,before:filters.before,...(filters.has_attachment?{has_attachment:'1'}:{})}:{}) });},
   message: (folder: string, uid: number,peek=false) => request<{ message: Message;attachments:Attachment[];safeHtml: string;hasRemoteImages:boolean;remoteUrl:string }>('message', { folder, uid: String(uid), ...(peek?{peek:'1'}:{}) }),
+  messageDocument:(kind:'message-headers'|'message-source'|'message-download',folder:string,uid:number)=>documentUrl(kind,folder,uid),
   thread:(folder:string,threadId:string,excludeUid:number)=>request<{messages:Array<{message:Message;attachments:Attachment[];safeHtml:string;hasRemoteImages:boolean;remoteUrl:string}>}>('thread',{folder,thread_id:threadId,exclude_uid:String(excludeUid)}),
   setSeen: (folder:string,uid:number,csrf:string) => {const body=new FormData();body.set('folder',folder);body.set('uid',String(uid));body.set('csrf',csrf);return request<{ok:boolean}>('set-seen',{}, {method:'POST',body});},
   updateFlags: (folder:string,uids:number[],flag:'seen'|'flagged',enabled:boolean,csrf:string) => {const body=new FormData();body.set('folder',folder);body.set('uids',uids.join(','));body.set('flag',flag);body.set('enabled',enabled?'1':'0');body.set('csrf',csrf);return request<{ok:boolean}>('update-flags',{}, {method:'POST',body});},
   deleteMessage: (folder:string,uid:number,csrf:string) => {const body=new FormData();body.set('folder',folder);body.set('uid',String(uid));body.set('csrf',csrf);return request<{ok:boolean}>('delete-message',{}, {method:'POST',body});},
   moveMessages: (folder:string,uids:number[],destination:string,csrf:string) => {const body=new FormData();body.set('folder',folder);body.set('uids',uids.join(','));body.set('destination',destination);body.set('csrf',csrf);return request<{ok:boolean}>('move-messages',{}, {method:'POST',body});},
+  copyMessages: (folder:string,uids:number[],destination:string,csrf:string) => {const body=new FormData();body.set('folder',folder);body.set('uids',uids.join(','));body.set('destination',destination);body.set('csrf',csrf);return request<{ok:boolean}>('copy-messages',{}, {method:'POST',body});},
   deleteMessages: (folder:string,uids:number[],csrf:string) => {const body=new FormData();body.set('folder',folder);body.set('uids',uids.join(','));body.set('csrf',csrf);return request<{ok:boolean;permanent:boolean}>('delete-messages',{}, {method:'POST',body});},
   emptyFolder: (folder:string,csrf:string) => {const body=new FormData();body.set('folder',folder);body.set('confirm','ELIMINAR TODO');body.set('csrf',csrf);return request<{ok:boolean;deleted:number}>('empty-folder',{}, {method:'POST',body});},
   createFolder:(name:string,csrf:string)=>{const body=new FormData();body.set('name',name);body.set('csrf',csrf);return request<{ok:boolean;folders:Folder[]}>('folder-create',{}, {method:'POST',body});},

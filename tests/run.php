@@ -7,6 +7,7 @@ require dirname(__DIR__) . '/src/Mail/MailException.php';
 require dirname(__DIR__) . '/src/Mail/AuthenticationException.php';
 require dirname(__DIR__) . '/src/Mail/MimeParser.php';
 require dirname(__DIR__) . '/src/Mail/BodyStructure.php';
+require dirname(__DIR__) . '/src/Mail/InlineImageResolver.php';
 require dirname(__DIR__) . '/src/Mail/ImapClient.php';
 require dirname(__DIR__) . '/src/Mail/SmtpClient.php';
 require dirname(__DIR__) . '/src/Contacts/VCard.php';
@@ -23,6 +24,7 @@ use AxerokMail\Mail\MailException;
 use AxerokMail\Mail\AuthenticationException;
 use AxerokMail\Mail\MimeParser;
 use AxerokMail\Mail\BodyStructure;
+use AxerokMail\Mail\InlineImageResolver;
 use AxerokMail\Mail\ImapClient;
 use AxerokMail\Mail\SmtpClient;
 use AxerokMail\Security\LoginRateLimiter;
@@ -63,6 +65,15 @@ $assert($nestedDescription['body']['type']==='text/html'&&$nestedDescription['bo
 $attachedHtmlStructure=BodyStructure::parseFetchResponse('* 1 FETCH (UID 11 BODYSTRUCTURE (("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" 80 2 NIL NIL NIL)("TEXT" "HTML" ("NAME" "attached.html") NIL NIL "BASE64" 400 8 NIL ("ATTACHMENT" ("FILENAME" "attached.html")) NIL NIL) "MIXED" ("BOUNDARY" "mixed") NIL NIL NIL))');
 $attachedHtmlDescription=BodyStructure::describe($attachedHtmlStructure);
 $assert($attachedHtmlDescription['body']['type']==='text/plain','BODYSTRUCTURE never promotes attached HTML to message body');
+
+$inlineParts=[['section'=>'2','content_id'=>'<Logo.TAD@mailer>']];
+$inlineUrl=static fn(array $part):string=>'api.php?action=inline&section='.$part['section'].'&uid=9';
+$resolvedCid=InlineImageResolver::resolve('<img src="cid:Logo.TAD%40mailer" alt="Logo TAD">',$inlineParts,$inlineUrl);
+$assert(str_contains($resolvedCid,'api.php?action=inline&amp;section=2&amp;uid=9'),'inline CID resolves URL-encoded identifier');
+$resolvedEntityCid=InlineImageResolver::resolve('<img src="cid:Logo.TAD&#64;mailer" alt="Logo TAD">',$inlineParts,$inlineUrl);
+$assert(str_contains($resolvedEntityCid,'api.php?action=inline&amp;section=2&amp;uid=9'),'inline CID resolves HTML-entity identifier');
+$unresolvedCid=InlineImageResolver::resolve('<img src="cid:unknown@example.com">',$inlineParts,$inlineUrl);
+$assert($unresolvedCid==='<img src="cid:unknown@example.com">','unknown inline CID is not rewritten');
 
 $tooMany = "From: a@example.com\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n" . str_repeat("--x\r\nContent-Type: text/plain\r\n\r\nx\r\n", 201) . '--x--';
 try { MimeParser::message($tooMany); $assert(false, 'MIME part limit'); } catch (MailException) { $assert(true, 'MIME part limit'); }

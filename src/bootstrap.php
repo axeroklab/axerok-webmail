@@ -154,8 +154,10 @@ function email_has_remote_images(string $html): bool
 /** @param array<int,array<string,mixed>> $inline */
 function resolve_email_cids(string $html,array $inline,string $folder,int $uid,string $account=''): string
 {
-    foreach($inline as $part){$cid=trim((string)($part['content_id']??''),'<>');$section=(string)($part['section']??'');if($cid===''||!preg_match('/^\d+(?:\.\d+)*$/',$section))continue;$url='api.php?action=inline&folder='.rawurlencode($folder).'&uid='.$uid.'&section='.rawurlencode($section).($account!==''?'&account='.rawurlencode($account):'');$html=preg_replace('/\bcid:'.preg_quote($cid,'/').'/i',$url,$html)??$html;}
-    return $html;
+    return \AxerokMail\Mail\InlineImageResolver::resolve($html,$inline,static function(array $part)use($folder,$uid,$account):string{
+        $section=(string)$part['section'];
+        return 'api.php?action=inline&folder='.rawurlencode($folder).'&uid='.$uid.'&section='.rawurlencode($section).($account!==''?'&account='.rawurlencode($account):'');
+    });
 }
 
 function mail_date(string $value, bool $compact = false): string

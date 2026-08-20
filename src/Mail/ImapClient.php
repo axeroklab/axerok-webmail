@@ -284,6 +284,24 @@ final class ImapClient
         return ['uid'=>$uid,'from'=>MimeParser::decodeHeader($headers['from']??''),'to'=>MimeParser::decodeHeader($headers['to']??''),'cc'=>MimeParser::decodeHeader($headers['cc']??''),'subject'=>MimeParser::decodeHeader($headers['subject']??'(Sin asunto)'),'date'=>$headers['date']??'','message_id'=>$headers['message-id']??'','thread_id'=>self::threadIdFromHeaders($headers),'html'=>$html,'text'=>$text,'attachments'=>$attachments,'inline'=>$inline];
     }
 
+    public function messageHeaders(string $folder, int $uid): string
+    {
+        $this->select($folder);
+        if ($uid < 1) { throw new MailException('Mensaje inválido.'); }
+        $headers=$this->firstLiteral($this->command("UID FETCH {$uid} (BODY.PEEK[HEADER])"));
+        if($headers==='')throw new MailException('El mensaje ya no existe.');
+        return $headers;
+    }
+
+    public function rawMessage(string $folder, int $uid): string
+    {
+        $this->select($folder);
+        if ($uid < 1) { throw new MailException('Mensaje inválido.'); }
+        $raw=$this->firstLiteral($this->command("UID FETCH {$uid} (BODY.PEEK[])"));
+        if($raw==='')throw new MailException('El mensaje ya no existe.');
+        return $raw;
+    }
+
     /** @return array{name:string,type:string,size:int,section:string,data:string} */
     public function attachment(string $folder,int $uid,string $section): array
     {
@@ -341,6 +359,15 @@ final class ImapClient
         $uids=array_values(array_unique(array_filter(array_map('intval',$uids),static fn(int $uid):bool=>$uid>0)));
         if($uids===[]||count($uids)>100)throw new MailException('La selección de mensajes no es válida.');
         $this->select($folder);$this->command('UID MOVE '.implode(',',$uids).' '.$this->quote($this->encodeMailbox($destination)));
+    }
+
+    /** @param array<int,int> $uids */
+    public function copyMany(string $folder,array $uids,string $destination): void
+    {
+        $destination = $this->validatedFolderName($destination);
+        $uids=array_values(array_unique(array_filter(array_map('intval',$uids),static fn(int $uid):bool=>$uid>0)));
+        if($uids===[]||count($uids)>100)throw new MailException('La selección de mensajes no es válida.');
+        $this->select($folder);$this->command('UID COPY '.implode(',',$uids).' '.$this->quote($this->encodeMailbox($destination)));
     }
 
     /** @param array<int,int> $uids */
