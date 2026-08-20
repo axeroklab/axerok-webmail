@@ -4,7 +4,7 @@ declare(strict_types=1);
 return [
     'app' => [
         'name' => 'AxerOK Mail',
-        'version' => '0.4.0-preview19',
+        'version' => '0.4.0-preview22',
         'mode' => 'cpanel',
         'base_url' => '',
         // In cPanel mode every system account creates its own private key in HOME.

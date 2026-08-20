@@ -133,6 +133,18 @@ final class ImapClient
         return $status;
     }
 
+    public function unreadCount(string $folder = 'INBOX'): int
+    {
+        $folder = $this->validatedFolderName($folder);
+        $response = $this->command('STATUS ' . $this->quote($this->encodeMailbox($folder)) . ' (UNSEEN)');
+        foreach ($response as $line) {
+            if (preg_match('/^\* STATUS .+ \([^)]*\bUNSEEN (\d+)\b[^)]*\)$/i', $line, $match)) {
+                return (int)$match[1];
+            }
+        }
+        throw new MailException('El servidor IMAP no informó la cantidad de mensajes no leídos.');
+    }
+
     /** @return array<int,array<string,mixed>> */
     public function messages(string $folder, int $page = 1, int $pageSize = 40, string $query = '', bool $searchBody = false, array $filters = []): array
     {
