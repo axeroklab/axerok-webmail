@@ -8,6 +8,7 @@ require dirname(__DIR__) . '/src/Mail/AuthenticationException.php';
 require dirname(__DIR__) . '/src/Mail/MimeParser.php';
 require dirname(__DIR__) . '/src/Mail/BodyStructure.php';
 require dirname(__DIR__) . '/src/Mail/InlineImageResolver.php';
+require dirname(__DIR__) . '/src/Mail/EmailHtmlResources.php';
 require dirname(__DIR__) . '/src/Mail/ImapClient.php';
 require dirname(__DIR__) . '/src/Mail/SmtpClient.php';
 require dirname(__DIR__) . '/src/Contacts/VCard.php';
@@ -25,6 +26,7 @@ use AxerokMail\Mail\AuthenticationException;
 use AxerokMail\Mail\MimeParser;
 use AxerokMail\Mail\BodyStructure;
 use AxerokMail\Mail\InlineImageResolver;
+use AxerokMail\Mail\EmailHtmlResources;
 use AxerokMail\Mail\ImapClient;
 use AxerokMail\Mail\SmtpClient;
 use AxerokMail\Security\LoginRateLimiter;
@@ -74,6 +76,18 @@ $resolvedEntityCid=InlineImageResolver::resolve('<img src="cid:Logo.TAD&#64;mail
 $assert(str_contains($resolvedEntityCid,'api.php?action=inline&amp;section=2&amp;uid=9'),'inline CID resolves HTML-entity identifier');
 $unresolvedCid=InlineImageResolver::resolve('<img src="cid:unknown@example.com">',$inlineParts,$inlineUrl);
 $assert($unresolvedCid==='<img src="cid:unknown@example.com">','unknown inline CID is not rewritten');
+
+$relativeImages='<base href="https://idp.personal.com.ar/mail/templates/"><img src="../images/logo.png" background=/assets/fondo.png>';
+$normalizedImages=EmailHtmlResources::normalize($relativeImages);
+$assert(str_contains($normalizedImages,'https://idp.personal.com.ar/mail/images/logo.png'),'relative email image resolves against base URL');
+$assert(str_contains($normalizedImages,'https://idp.personal.com.ar/assets/fondo.png'),'root-relative email image resolves against origin');
+$assert(EmailHtmlResources::hasRemoteImages($relativeImages),'relative email image is detected as remote');
+$assert(EmailHtmlResources::hasRemoteImages('<img src=//cdn.example.com/logo.png>'),'unquoted protocol-relative image is detected');
+$responsiveImages=EmailHtmlResources::normalize('<base href="https://cdn.example.com/mail/"><img srcset="logo.png 1x, logo@2x.png 2x">');
+$assert(str_contains($responsiveImages,'https://cdn.example.com/mail/logo.png 1x, https://cdn.example.com/mail/logo@2x.png 2x'),'relative srcset images resolve against base URL');
+$assert(EmailHtmlResources::hasRemoteImages($responsiveImages),'responsive remote images are detected');
+$assert(EmailHtmlResources::hasRemoteImages('<div style="background-image:url(https://cdn.example.com/a.png)">'),'CSS remote image is detected');
+$assert(!EmailHtmlResources::hasRemoteImages('<img src="cid:logo@example.com"><img src="data:image/png;base64,AA==">'),'CID and data images remain local');
 
 $tooMany = "From: a@example.com\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n" . str_repeat("--x\r\nContent-Type: text/plain\r\n\r\nx\r\n", 201) . '--x--';
 try { MimeParser::message($tooMany); $assert(false, 'MIME part limit'); } catch (MailException) { $assert(true, 'MIME part limit'); }

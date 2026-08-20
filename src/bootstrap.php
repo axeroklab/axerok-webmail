@@ -127,6 +127,7 @@ function e(?string $value): string
 
 function safe_email_html(string $html, bool $allowRemoteImages = false): string
 {
+    $html = \AxerokMail\Mail\EmailHtmlResources::normalize($html);
     $html = preg_replace('/<base\b[^>]*>/i', '', $html) ?? '';
     $html = preg_replace_callback('/<a\b([^>]*)>/i', static function (array $match): string {
         $attributes = $match[1];
@@ -142,13 +143,13 @@ function safe_email_html(string $html, bool $allowRemoteImages = false): string
     }, $html) ?? '';
     $imageSources = $allowRemoteImages ? "'self' data: cid: https:" : "'self' data: cid:";
     $policy = "default-src 'none'; img-src {$imageSources}; style-src 'unsafe-inline'; font-src data:; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
-    $blockedImageStyle = $allowRemoteImages ? '' : 'img[src^="http" i]{visibility:hidden}';
+    $blockedImageStyle = $allowRemoteImages ? '' : 'img[src^="http://" i],img[src^="https://" i],img[src^="//"]{visibility:hidden}';
     return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' . $policy . '"><style>html{color:#202635;background:#fff;font:16px/1.6 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}' . $blockedImageStyle . '</style></head><body>' . $html . '</body></html>';
 }
 
 function email_has_remote_images(string $html): bool
 {
-    return preg_match('/(?:\bsrc\s*=\s*["\']\s*https?:\/\/|\burl\s*\(\s*["\']?\s*https?:\/\/)/i', $html) === 1;
+    return \AxerokMail\Mail\EmailHtmlResources::hasRemoteImages($html);
 }
 
 /** @param array<int,array<string,mixed>> $inline */
