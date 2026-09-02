@@ -160,7 +160,7 @@ final class ImapClient
             $range = self::pageSequenceRange((int)$status['exists'], $page, $pageSize);
             if ($range === null) { return []; }
             [$start, $end] = $range;
-            $parts = $this->command("FETCH {$start}:{$end} (UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES AUTO-SUBMITTED PRECEDENCE LIST-ID LIST-UNSUBSCRIBE)])");
+            $parts = $this->command("FETCH {$start}:{$end} (UID FLAGS INTERNALDATE RFC822.SIZE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES AUTO-SUBMITTED PRECEDENCE LIST-ID LIST-UNSUBSCRIBE)])");
         } else {
             $search = $this->command('UID SEARCH CHARSET UTF-8 ' . $criteria);
             foreach ($search as $line) {
@@ -173,7 +173,7 @@ final class ImapClient
             $this->lastMailboxTotal = count($uids);
             $uids = array_slice($uids, max(0, ($page - 1) * $pageSize), $pageSize);
             if ($uids === []) { return []; }
-            $parts = $this->command('UID FETCH ' . implode(',', $uids) . ' (UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES AUTO-SUBMITTED PRECEDENCE LIST-ID LIST-UNSUBSCRIBE)])');
+            $parts = $this->command('UID FETCH ' . implode(',', $uids) . ' (UID FLAGS INTERNALDATE RFC822.SIZE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES AUTO-SUBMITTED PRECEDENCE LIST-ID LIST-UNSUBSCRIBE)])');
         }
         $byUid = [];
         for ($index = 0, $count = count($parts); $index < $count; $index++) {
@@ -182,6 +182,12 @@ final class ImapClient
             $header = isset($parts[$index + 1]) && (str_contains($parts[$index + 1], "\r\n") || preg_match('/^[\w-]+:/', $parts[$index + 1])) ? $parts[++$index] : '';
             $headers = MimeParser::headers($header);
             $uid = (int)$uidMatch[1];
+            $hasAttachments = false;
+            try {
+                if (stripos($meta, 'BODYSTRUCTURE') !== false) {
+                    $hasAttachments = BodyStructure::describe(BodyStructure::parseFetchResponse($meta))['attachments'] !== [];
+                }
+            } catch (MailException) {}
             $byUid[$uid] = [
                 'uid' => $uid,
                 'folder' => $folder,
@@ -197,6 +203,7 @@ final class ImapClient
                 'keywords' => self::keywordsFromFetch($meta),
                 'category' => isset($headers['list-id'])||isset($headers['list-unsubscribe'])||(isset($headers['auto-submitted'])&&strcasecmp($headers['auto-submitted'],'no')!==0)||in_array(strtolower($headers['precedence']??''),['bulk','list','junk'],true)?'notification':'principal',
                 'size' => preg_match('/RFC822\.SIZE (\d+)/i', $meta, $sizeMatch) ? (int)$sizeMatch[1] : 0,
+                'has_attachments' => $hasAttachments,
             ];
         }
         krsort($byUid, SORT_NUMERIC);
