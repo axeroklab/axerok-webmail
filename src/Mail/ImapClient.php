@@ -292,7 +292,11 @@ final class ImapClient
         $headers=MimeParser::headers($header);$structure=BodyStructure::parseFetchResponse($this->responseSyntax($overview));$description=BodyStructure::describe($structure);
         $body=$description['body'];$html='';$text='';
         if(is_array($body)){
-            $rawBody=$this->fetchSection($uid,(string)$body['section'],!$markSeen);
+            // Un cuerpo que no se puede traer (parte vacía o estructura MIME rara,
+            // p.ej. bounces/DSN) no debe romper la apertura del mensaje: se muestra
+            // sin cuerpo (con cabeceras y adjuntos) en vez de tirar un error.
+            try{ $rawBody=$this->fetchSection($uid,(string)$body['section'],!$markSeen); }
+            catch(MailException){ $rawBody=''; }
             $decoded=MimeParser::decodeBody($rawBody,(string)$body['encoding'],(string)($body['params']['charset']??'UTF-8'));
             if($body['type']==='text/html')$html=$decoded;else$text=$decoded;
         } elseif($markSeen) {

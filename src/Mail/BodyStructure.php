@@ -60,7 +60,16 @@ final class BodyStructure
             return ['section'=>$section,'type'=>'multipart/'.$subtype,'params'=>self::params($raw[$index+1]??null),'disposition'=>self::disposition($raw[$index+2]??null),'encoding'=>'','size'=>0,'content_id'=>'','children'=>$children];
         }
         $major=strtolower((string)($raw[0]??'application'));$minor=strtolower((string)($raw[1]??'octet-stream'));
-        $children=[];if($major==='message'&&$minor==='rfc822'&&isset($raw[8])&&is_array($raw[8]))$children[]=self::part($raw[8],$section.'.1');
+        $children=[];
+        if($major==='message'&&$minor==='rfc822'&&isset($raw[8])&&is_array($raw[8])){
+            // El mensaje encapsulado (message/rfc822) se numera con la sección del
+            // rfc822 como prefijo, como si fuera el mensaje de nivel superior: si es
+            // multipart sus partes son N.1, N.2 (NO N.1.1/N.1.2); si es una sola
+            // parte, es N.1. Numerarlo mal hacía que el fetch de la sección diera
+            // vacío -> "No se pudo cargar la parte" (típico en bounces/DSN).
+            $encapMultipart=isset($raw[8][0])&&is_array($raw[8][0]);
+            $children[]=self::part($raw[8],$encapMultipart?$section:$section.'.1');
+        }
         return ['section'=>$section,'type'=>$major.'/'.$minor,'params'=>self::params($raw[2]??null),'content_id'=>trim((string)($raw[3]??''),'<>'),'encoding'=>strtolower((string)($raw[5]??'')),'size'=>(int)($raw[6]??0),'disposition'=>self::findDisposition($raw),'children'=>$children];
     }
 
