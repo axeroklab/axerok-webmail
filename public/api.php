@@ -142,6 +142,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'sso') {
     try {
         $imap = new ImapClient((array)config('mail'));
         $imap->connect($email . '*nxsso', $master); $imap->close();
+        // Sesión LIMPIA para esta casilla: cada SSO abre exactamente la cuenta del
+        // token, sin arrastrar una sesión previa de otra casilla (evita abrir la
+        // casilla equivocada + fijación de sesión). Se regenera el id de sesión.
+        if (session_status() === PHP_SESSION_ACTIVE) { @session_regenerate_id(true); }
+        $_SESSION['mail_accounts'] = [];
+        $_SESSION['mail_active'] = null;
         Credentials::store($email . '*nxsso', $master, app_credential_key());
     } catch (Throwable $e) {
         error_log('[AxerOK Mail SSO] ' . str_replace(["\r", "\n"], ' ', $e->getMessage()));
