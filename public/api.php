@@ -119,6 +119,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'login') {
     }
 }
 
+// ── SSO desde el panel ninvux (entrar SIN clave vía master user de dovecot) ────
+// El panel emite un token firmado (HMAC, /etc/nxsso/panel-secret). Se valida y se
+// entra con casilla*nxsso + master password (/etc/nxsso/master). El master nunca
+// sale del server. Es un GET (lo abre el panel con ?action=sso&token=...).
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'sso') {
+    $baseUrl = rtrim((string)config('app.base_url', ''), '/');
+    $fail = static function () use ($baseUrl) { header('Location: ' . $baseUrl . '/?sso_error=1'); exit; };
+    $token = (string)($_GET['token'] ?? '');
+    $email = null;
+    if ($token !== '' && strpos($token, '.') !== false && is_readable('/etc/nxsso/panel-secret')) {
+        [$b64, $sig] = explode('.', $token, 2);
+        $payload = base64_decode(strtr($b64, '-_', '+/'));
+        $secret = trim((string)@file_get_contents('/etc/nxsso/panel-secret'));
+        if ($payload !== false && $secret !== '' && hash_equals(hash_hmac('sha256', $payload, $secret), $sig)) {
+            [$mail, $exp] = array_pad(explode('|', $payload, 2), 2, '');
+            if ($mail !== '' && (int)$exp >= time()) { $email = strtolower(trim($mail)); }
+        }
+    }
+    $master = is_readable('/etc/nxsso/master') ? trim((string)@file_get_contents('/etc/nxsso/master')) : '';
+    if ($email === null || $master === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) { $fail(); }
+    try {
+        $imap = new ImapClient((array)config('mail'));
+        $imap->connect($email . '*nxsso', $master); $imap->close();
+        Credentials::store($email . '*nxsso', $master, app_credential_key());
+    } catch (Throwable $e) {
+        error_log('[AxerOK Mail SSO] ' . str_replace(["\r", "\n"], ' ', $e->getMessage()));
+        $fail();
+    }
+    header('Location: ' . $baseUrl . '/'); exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'logout') { api_require_csrf();Credentials::clear();json_response(['ok'=>true]); }
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'account-switch') { api_require_csrf();$candidate=strtolower(trim((string)($_POST['email']??'')));if(!Credentials::setActive($candidate))json_response(['error'=>'La cuenta ya no está disponible.'],404);json_response($sessionPayload($candidate)); }
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'account-remove') { api_require_csrf();Credentials::remove((string)($_POST['email']??''));json_response($sessionPayload()); }
