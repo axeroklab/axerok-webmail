@@ -7,7 +7,7 @@ final class Credentials
 {
     private const MAX_ACCOUNTS = 8;
 
-    public static function store(string $email, string $password, string $hexKey): void
+    public static function store(string $email, string $password, string $hexKey, ?string $imapUser = null): void
     {
         self::migrateLegacy();
         $email = strtolower(trim($email));
@@ -15,11 +15,27 @@ final class Credentials
         if (!isset($accounts[$email]) && count($accounts) >= self::MAX_ACCOUNTS) {
             throw new \RuntimeException('Podés mantener abiertas hasta 8 cuentas.');
         }
-        $accounts[$email] = ['secret' => self::encrypt($password, $hexKey), 'added_at' => time()];
+        $entry = ['secret' => self::encrypt($password, $hexKey), 'added_at' => time()];
+        // Usuario real de login IMAP/SMTP cuando difiere del email (p.ej. master user
+        // de dovecot en el SSO: "casilla*nxsso"). El email se guarda limpio para que
+        // la identidad mostrada y el "De:" al enviar sean la dirección real.
+        if ($imapUser !== null && $imapUser !== '' && strtolower(trim($imapUser)) !== $email) {
+            $entry['imap_user'] = trim($imapUser);
+        }
+        $accounts[$email] = $entry;
         session_regenerate_id(true);
         $_SESSION['mail_accounts'] = $accounts;
         $_SESSION['mail_active'] = $email;
         unset($_SESSION['mail_user'], $_SESSION['mail_secret']);
+    }
+
+    /** Usuario de autenticación IMAP/SMTP para la cuenta (imap_user si existe, si no el email). */
+    public static function imapUser(?string $requested = null): ?string
+    {
+        $email = self::email($requested);
+        if ($email === null) return null;
+        $user = (string)(self::accountMap()[$email]['imap_user'] ?? '');
+        return $user !== '' ? $user : $email;
     }
 
     /** @return list<string> */
