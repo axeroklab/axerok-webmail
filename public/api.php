@@ -97,7 +97,7 @@ $action = (string)($_GET['action'] ?? 'session');
 $requestedAccount = strtolower(trim((string)($_SERVER['HTTP_X_AXEROK_ACCOUNT'] ?? $_GET['account'] ?? '')));
 $sessionPayload = static function (?string $requested = null): array {
     $email=Credentials::email($requested);
-    return ['authenticated'=>$email!==null,'email'=>$email,'accounts'=>Credentials::accounts(),'csrf'=>(string)$_SESSION['csrf'],'version'=>(string)config('app.version','0.4.0-preview27'),'page_size'=>max(10,min(100,(int)config('mail.page_size',40))),'webmail_home_url'=>\AxerokMail\Runtime::webmailHomeUrl()];
+    return ['authenticated'=>$email!==null,'email'=>$email,'accounts'=>Credentials::accounts(),'csrf'=>(string)$_SESSION['csrf'],'version'=>(string)config('app.version','0.4.0-preview27'),'page_size'=>max(10,min(100,(int)config('mail.page_size',40))),'webmail_home_url'=>\AxerokMail\Runtime::webmailHomeUrl(),'filters_enabled'=>!\AxerokMail\Runtime::isCpanel()];
 };
 
 if ($action === 'session') {
@@ -203,6 +203,19 @@ try {
     }
     if($action==='identities'){$repo=new MailPreferenceRepository((array)config('contacts'));if(\AxerokMail\Runtime::isCpanel()){if($_SERVER['REQUEST_METHOD']!=='GET')throw new RuntimeException('En modo cPanel las identidades se administran desde Roundcube.');try{json_response(['identities'=>(new RoundcubeReader($email))->identities(),'source'=>'roundcube','read_only'=>true]);}catch(Throwable){json_response(['identities'=>[],'source'=>'roundcube','read_only'=>true]);}}if($_SERVER['REQUEST_METHOD']==='POST'){api_require_csrf();if(($_POST['_operation']??'')==='delete'){$repo->deleteIdentity($email,(string)($_POST['id']??''));json_response(['ok'=>true,'identities'=>$repo->identities($email)]);}$identity=['id'=>(string)($_POST['id']??''),'email'=>(string)($_POST['email']??''),'display_name'=>(string)($_POST['display_name']??''),'reply_to'=>(string)($_POST['reply_to']??''),'default_bcc'=>(string)($_POST['default_bcc']??''),'signature_html'=>clean_composer_html((string)($_POST['signature_html']??''))];json_response(['ok'=>true,'identity'=>$repo->saveIdentity($email,$identity),'identities'=>$repo->identities($email)]);}if($_SERVER['REQUEST_METHOD']==='DELETE'){parse_str((string)file_get_contents('php://input'),$delete);if(!hash_equals((string)$_SESSION['csrf'],(string)($delete['csrf']??'')))json_response(['error'=>'La sesión expiró.'],419);$repo->deleteIdentity($email,(string)($delete['id']??''));json_response(['ok'=>true,'identities'=>$repo->identities($email)]);}json_response(['identities'=>$repo->identities($email)]);}
     if($action==='blocked-senders'){$repo=new MailPreferenceRepository((array)config('contacts'));if($_SERVER['REQUEST_METHOD']==='POST'){api_require_csrf();if(($_POST['_operation']??'')!=='unblock')throw new RuntimeException('Operación inválida.');$repo->unblockSender($email,(string)($_POST['sender']??''));json_response(['ok'=>true,'senders'=>$repo->blockedSenders($email)]);}if($_SERVER['REQUEST_METHOD']==='DELETE'){parse_str((string)file_get_contents('php://input'),$delete);if(!hash_equals((string)$_SESSION['csrf'],(string)($delete['csrf']??'')))json_response(['error'=>'La sesión expiró.'],419);$repo->unblockSender($email,(string)($delete['sender']??''));json_response(['ok'=>true,'senders'=>$repo->blockedSenders($email)]);}json_response(['senders'=>$repo->blockedSenders($email)]);}
+    if($action==='filters'){
+        if(\AxerokMail\Runtime::isCpanel())json_response(['error'=>'En este servidor los filtros se administran desde cPanel.','filters'=>[]],400);
+        $svc=new \AxerokMail\Filters\FilterService((array)config('contacts'),(array)config('mail'));
+        if($_SERVER['REQUEST_METHOD']==='POST'){
+            api_require_csrf();
+            if((string)($_POST['_operation']??'')==='delete'){$svc->delete($email,(string)($_POST['id']??''),$imapUser,$password);json_response(['ok'=>true,'filters'=>$svc->all($email)]);}
+            $payload=json_decode((string)($_POST['filter']??''),true);
+            if(!is_array($payload))throw new RuntimeException('Filtro inválido.');
+            $saved=$svc->save($email,$payload,$imapUser,$password);
+            json_response(['ok'=>true,'filter'=>$saved,'filters'=>$svc->all($email)]);
+        }
+        json_response(['filters'=>$svc->all($email)]);
+    }
     if($action==='block-sender'&&$_SERVER['REQUEST_METHOD']==='POST'){
         api_require_csrf();$folder=(string)($_POST['folder']??'INBOX');$uid=(int)($_POST['uid']??0);$imap=new ImapClient((array)config('mail'));$imap->connect($imapUser,$password);$message=$imap->message($folder,$uid,false);$from=(string)($message['from']??'');$sender=preg_match('/<([^<>]+)>/',$from,$match)?trim($match[1]):trim($from);$junk=null;foreach($imap->folders() as $candidate)if($candidate['special']==='junk'){$junk=$candidate['name'];break;}if($junk===null)throw new RuntimeException('No se encontró la carpeta Spam.');(new MailPreferenceRepository((array)config('contacts')))->blockSender($email,$sender);if($folder!==$junk)$imap->moveMany($folder,[$uid],$junk);$imap->close();json_response(['ok'=>true,'sender'=>strtolower($sender)]);
     }
