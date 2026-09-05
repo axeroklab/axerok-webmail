@@ -1,4 +1,4 @@
-import type { Attachment, Contact, Draft, Folder, Identity, Label, MailRow, MailTemplate, Message, Preferences, SearchFilters, Session } from './types';
+import type { Attachment, Contact, Draft, Folder, Identity, Label, MailFilter, MailRow, MailTemplate, Message, Preferences, SearchFilters, Session } from './types';
 
 const endpoint = new URL('api.php', window.location.href).pathname;
 
@@ -75,6 +75,9 @@ export const api = {
   saveIdentity:(identity:Identity,csrf:string)=>{const body=new FormData();Object.entries(identity).forEach(([key,value])=>body.set(key,String(value??'')));body.set('csrf',csrf);return request<{ok:boolean;identity:Identity;identities:Identity[]}>('identities',{}, {method:'POST',body});},
   deleteIdentity:(id:string,csrf:string)=>{const body=new FormData();body.set('_operation','delete');body.set('id',id);body.set('csrf',csrf);return request<{ok:boolean;identities:Identity[]}>('identities',{}, {method:'POST',body});},
   unblockSender:(sender:string,csrf:string)=>{const body=new FormData();body.set('_operation','unblock');body.set('sender',sender);body.set('csrf',csrf);return request<{ok:boolean;senders:string[]}>('blocked-senders',{}, {method:'POST',body});},
+  filters:()=>request<{filters:MailFilter[]}>('filters'),
+  saveFilter:(filter:MailFilter,csrf:string)=>{const body=new FormData();body.set('filter',JSON.stringify(filter));body.set('csrf',csrf);return request<{ok:boolean;filter:MailFilter;filters:MailFilter[]}>('filters',{}, {method:'POST',body});},
+  deleteFilter:(id:string,csrf:string)=>{const body=new FormData();body.set('_operation','delete');body.set('id',id);body.set('csrf',csrf);return request<{ok:boolean;filters:MailFilter[]}>('filters',{}, {method:'POST',body});},
   send: (body:FormData) => request<{ok:boolean;warning:string}>('send',{}, {method:'POST',body}),
   logout: (csrf:string) => {const body=new FormData();body.set('csrf',csrf);return request<{ok:boolean}>('logout',{}, {method:'POST',body});},
 };
