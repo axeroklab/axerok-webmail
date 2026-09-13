@@ -171,6 +171,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'sso') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'logout') { api_require_csrf();Credentials::clear();json_response(['ok'=>true]); }
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'account-switch') { api_require_csrf();$candidate=strtolower(trim((string)($_POST['email']??'')));if(!Credentials::setActive($candidate))json_response(['error'=>'La cuenta ya no está disponible.'],404);json_response($sessionPayload($candidate)); }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'account-password') {
+    api_require_csrf();
+    $email = Credentials::email();
+    if (!$email) { json_response(['error'=>'La sesión expiró. Recargá la página.'],401); }
+    $current = (string)($_POST['current_password'] ?? '');
+    $new     = (string)($_POST['new_password'] ?? '');
+    if ($current === '' || $new === '') { json_response(['error'=>'Completá la contraseña actual y la nueva.'],422); }
+    $descr = [0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']]; $pipes=[];
+    $proc = @proc_open(['sudo','-n','/usr/local/sbin/ninvux-mail-passwd-helper',$email], $descr, $pipes);
+    if (!is_resource($proc)) { json_response(['error'=>'No se pudo cambiar la contraseña.'],500); }
+    fwrite($pipes[0], $current."\n".$new."\n"); fclose($pipes[0]);
+    $out = stream_get_contents($pipes[1]); fclose($pipes[1]);
+    $err = trim((string)stream_get_contents($pipes[2])); fclose($pipes[2]);
+    $rc = proc_close($proc);
+    if ($rc === 0 && strpos((string)$out,'OK') !== false) {
+        try { Credentials::store($email, $new, app_credential_key(), Credentials::imapUser()); } catch (\Throwable $e) {}
+        json_response(['ok'=>true]);
+    }
+    json_response(['error'=>($err !== '' ? $err : 'No se pudo cambiar la contraseña.')],422);
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'account-remove') { api_require_csrf();Credentials::remove((string)($_POST['email']??''));json_response($sessionPayload()); }
 
 if($requestedAccount!==''&&!Credentials::has($requestedAccount))json_response(['error'=>'La cuenta solicitada ya no está disponible.'],404);

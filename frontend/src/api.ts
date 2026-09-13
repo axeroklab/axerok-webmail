@@ -80,4 +80,5 @@ export const api = {
   deleteFilter:(id:string,csrf:string)=>{const body=new FormData();body.set('_operation','delete');body.set('id',id);body.set('csrf',csrf);return request<{ok:boolean;filters:MailFilter[]}>('filters',{}, {method:'POST',body});},
   send: (body:FormData) => request<{ok:boolean;warning:string}>('send',{}, {method:'POST',body}),
   logout: (csrf:string) => {const body=new FormData();body.set('csrf',csrf);return request<{ok:boolean}>('logout',{}, {method:'POST',body});},
+  changePassword:(current:string,next:string,csrf:string)=>{const body=new FormData();body.set('current_password',current);body.set('new_password',next);body.set('csrf',csrf);return request<{ok:boolean}>('account-password',{}, {method:'POST',body});},
 };
