@@ -116,8 +116,10 @@ final class BodyStructure
         foreach($part['children'] as $child)self::collectFiles($child,$attachments,$inline);
         if($part['children']!==[])return;
         $filename=$part['disposition']['params']['filename']??$part['disposition']['params']['filename*']??$part['params']['name']??$part['params']['name*']??'';
-        $isInline=$part['disposition']['type']==='inline'||$part['content_id']!=='';
-        if($isInline&&str_starts_with($part['type'],'image/')){$part['name']=$filename!==''?$filename:'imagen';$inline[]=$part;}
-        elseif($part['disposition']['type']==='attachment'||$filename!==''){$part['name']=$filename!==''?$filename:'archivo';$attachments[]=$part;}
+        $isImage=str_starts_with($part['type'],'image/');
+        $isAttachment=$part['disposition']['type']==='attachment';
+        $isInlineImage=$isImage&&($part['disposition']['type']==='inline'||$part['content_id']!=='');
+        if($isInlineImage){$part['name']=$filename!==''?$filename:'imagen';$inline[]=$part;}
+        if($isAttachment||($filename!==''&&!$isInlineImage)){$part['name']=$filename!==''?$filename:'archivo';$attachments[]=$part;}
     }
 }

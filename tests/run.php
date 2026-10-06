@@ -59,6 +59,12 @@ $description=BodyStructure::describe($structure);
 $assert($description['body']['section']==='2','BODYSTRUCTURE prefers HTML body across mixed wrappers');
 $assert($description['inline'][0]['section']==='3','BODYSTRUCTURE inline CID section');
 $assert($description['attachments'][0]['section']==='4','BODYSTRUCTURE attachment section');
+$assert(count($description['attachments'])===1,'BODYSTRUCTURE inline image is not listed as attachment');
+
+$cidAttachment=BodyStructure::parseFetchResponse('* 1 FETCH (UID 12 BODYSTRUCTURE (("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" 80 2 NIL NIL NIL)("IMAGE" "PNG" ("NAME" "Logo.png") "f_abc123" NIL "BASE64" 900 NIL ("ATTACHMENT" ("FILENAME" "Logo.png")) NIL NIL) "MIXED" ("BOUNDARY" "x") NIL NIL NIL))');
+$cidAttachmentDescription=BodyStructure::describe($cidAttachment);
+$assert(count($cidAttachmentDescription['attachments'])===1&&$cidAttachmentDescription['attachments'][0]['name']==='Logo.png','BODYSTRUCTURE image marked attachment with Content-ID is listed as attachment');
+$assert(count($cidAttachmentDescription['inline'])===1,'BODYSTRUCTURE image marked attachment with Content-ID stays resolvable by cid');
 
 $nestedStructure=BodyStructure::parseFetchResponse('* 1 FETCH (UID 10 BODYSTRUCTURE ((("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "QUOTED-PRINTABLE" 120 4 NIL NIL NIL)("TEXT" "HTML" ("CHARSET" "UTF-8") NIL NIL "QUOTED-PRINTABLE" 500 12 NIL NIL NIL) "ALTERNATIVE" ("BOUNDARY" "alt") NIL NIL NIL)("IMAGE" "JPEG" ("NAME" "hero.jpg") "hero" NIL "BASE64" 9000 NIL ("INLINE" ("FILENAME" "hero.jpg")) NIL NIL) "RELATED" ("BOUNDARY" "related") NIL NIL NIL))');
 $nestedDescription=BodyStructure::describe($nestedStructure);
